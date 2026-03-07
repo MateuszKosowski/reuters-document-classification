@@ -1,11 +1,11 @@
 package org.kosowskiinowak;
 
-public class Main {
-    static void main() {
-        IO.println(String.format("Hello and welcome!"));
+import org.kosowskiinowak.service.ArticleLoader;
 
-        for (int i = 1; i <= 5; i++) {
-            IO.println("i = " + i);
-        }
+public class Main {
+    static void main(String[] args) {
+        String dataSource = "src/main/resources/reuters21578";
+        ArticleLoader articleLoader = new ArticleLoader();
+        articleLoader.loadArticles(dataSource);
     }
 }
