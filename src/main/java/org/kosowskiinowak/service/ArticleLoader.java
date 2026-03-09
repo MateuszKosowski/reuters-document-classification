@@ -44,6 +44,7 @@ public class ArticleLoader {
         try {
             List<Path> sgmFiles = Files.list(Paths.get(directoryPath))
                     .filter(path -> path.toString().endsWith(".sgm"))
+                    .sorted()
                     .toList();
 
 

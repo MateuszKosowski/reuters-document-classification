@@ -9,9 +9,10 @@ public record FeatureVector
 
             double averageWordLength,
             double vocabularyRichness,
-            double bodyLength,
-            double wordCount,
-            double numberDensity,
-            double capitalLettersRatio,
-            double avgSentenceLength
+            double averageSentenceLength,
+            double uppercaseLetterRatio,
+            double financialSignDensity,
+            double fleschReadingEaseIndex,
+            double vowelToConsonantRatio,
+            double sumOfAllNumericValues
         ){}

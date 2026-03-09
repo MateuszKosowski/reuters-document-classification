@@ -10,13 +10,13 @@ The word that occurs most often in the text after removing conjunctions, preposi
 The word with the maximum number of characters in the document.
 *   **Calculation:** Identify all individual words and find the one with the `max(length)`.
 
-### 3. Vocabulary Richness 
-A measure of how varied the vocabulary is in the text.
-*   **Calculation:** `Number of Unique Words / Total Number of Words`
-
-### 4. Average Word Length
+### 3. Average Word Length
 The mean number of characters per word.
 *   **Calculation:** `Total Number of Characters (in words) / Total Number of Words`
+
+### 4. Vocabulary Richness 
+A measure of how varied the vocabulary is in the text.
+*   **Calculation:** `Number of Unique Words / Total Number of Words`
 
 ### 5. Average Sentence Length
 The mean number of words per sentence.
