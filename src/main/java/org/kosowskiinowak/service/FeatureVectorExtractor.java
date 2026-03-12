@@ -196,24 +196,36 @@ public class FeatureVectorExtractor {
      * @return the Flesch Reading Ease Index for the article text
      */
     double getFleschReadingEaseIndex(String text) {
+        if (text == null || text.isBlank()) return 0.0;
+
         // Calculation: 206.835 - 1.015 * (Total Words / Total Sentences) - 84.6 * (Total Syllables / Total Words)
 
         String[] sentences = text.split("[.!?]+");
-        int totalSentences = sentences.length;
+        int totalSentences = Math.max(1, sentences.length);
 
-        // \\s+ matches one or more whitespace characters
-        String[] words = text.toLowerCase().replaceAll("[^a-z ]", "").split("\\s+");
+        // Filter for alphanumeric words only, ignoring numbers and symbols
+        String[] words = text.toLowerCase().replaceAll("[^a-z ]", " ").split("\\s+");
         int totalWords = 0;
         int totalSyllables = 0;
 
         for (String word : words) {
-            if (word.isBlank()) continue;
+            if (word.isBlank() || word.length() < 1) continue;
+            
+            // RiTa might crash on very short or non-dictionary words
+            // If it's not a word with at least one letter, skip it or count as 1 syllable
+            if (!word.matches("[a-z]+")) continue;
+
             totalWords++;
 
-            String syllables = RiTa.syllables(word);
-            if (syllables != null && !syllables.isBlank()) {
-                totalSyllables += syllables.split("/").length;
-            } else {
+            try {
+                String syllables = RiTa.syllables(word);
+                if (syllables != null && !syllables.isBlank()) {
+                    totalSyllables += syllables.split("/").length;
+                } else {
+                    totalSyllables += 1;
+                }
+            } catch (Exception e) {
+                // If RiTa fails, assume 1 syllable and continue to avoid crashing the whole process
                 totalSyllables += 1;
             }
         }
