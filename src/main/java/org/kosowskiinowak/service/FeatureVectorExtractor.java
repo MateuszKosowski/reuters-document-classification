@@ -1,22 +1,18 @@
 package org.kosowskiinowak.service;
 
-import org.kosowskiinowak.model.FeatureVector;
-import org.kosowskiinowak.model.SingleArticle;
-
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.en.EnglishAnalyzer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.kosowskiinowak.model.FeatureVector;
+import org.kosowskiinowak.model.SingleArticle;
 import rita.RiTa;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import static java.awt.SystemColor.text;
 
 public class FeatureVectorExtractor {
 
@@ -210,7 +206,7 @@ public class FeatureVectorExtractor {
 
         for (String word : words) {
             if (word.isBlank() || word.length() < 1) continue;
-            
+
             // RiTa might crash on very short or non-dictionary words
             // If it's not a word with at least one letter, skip it or count as 1 syllable
             if (!word.matches("[a-z]+")) continue;
@@ -262,7 +258,7 @@ public class FeatureVectorExtractor {
         }
 
         if (consonants == 0) {
-            return (double) vowels;
+            return vowels;
         }
 
         return (double) vowels / consonants;

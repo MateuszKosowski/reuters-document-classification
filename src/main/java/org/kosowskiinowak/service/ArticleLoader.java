@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.nio.charset.StandardCharsets;
+import java.util.stream.Stream;
 
 public class ArticleLoader {
 
@@ -31,7 +32,6 @@ public class ArticleLoader {
 
     private static final Pattern PLACES_PATTERN = Pattern.compile("<PLACES>(.*?)</PLACES>", Pattern.DOTALL);
     private static final Pattern D_TAG_PATTERN = Pattern.compile("<D>(.*?)</D>");
-    private static final Pattern TITLE_PATTERN = Pattern.compile("<TITLE>(.*?)</TITLE>", Pattern.DOTALL);
     private static final Pattern BODY_PATTERN = Pattern.compile("<BODY>(.*?)</BODY>", Pattern.DOTALL);
     private static final Set<String> ALLOWED_COUNTRIES = Set.of(
             "west-germany", "usa", "france", "uk", "canada", "japan"
@@ -41,12 +41,11 @@ public class ArticleLoader {
     public List<SingleArticle> loadArticles(String directoryPath) {
         List<SingleArticle> validArticles = new ArrayList<>();
 
-        try {
-            List<Path> sgmFiles = Files.list(Paths.get(directoryPath))
+        try (Stream<Path> pathStream = Files.list(Paths.get(directoryPath))) {
+            List<Path> sgmFiles = pathStream
                     .filter(path -> path.toString().endsWith(".sgm"))
                     .sorted()
                     .toList();
-
 
             for (Path file : sgmFiles) {
                 String fileContent = Files.readString(file, StandardCharsets.ISO_8859_1);
@@ -73,15 +72,10 @@ public class ArticleLoader {
             String countryLabel = extractValidCountry(articleRawText);
 
             if (countryLabel != null) {
-                String title = extractTag(articleRawText, TITLE_PATTERN);
                 String body = extractTag(articleRawText, BODY_PATTERN);
 
-                String fullText = (title + " " + body).trim();
-
-                fullText = fullText.replace("&#3;", "");
-
-                if (!fullText.isBlank()) {
-                    articlesFromFile.add(new SingleArticle(countryLabel, fullText));
+                if (!body.isBlank()) {
+                    articlesFromFile.add(new SingleArticle(countryLabel, body));
                 }
             }
         }
@@ -101,7 +95,7 @@ public class ArticleLoader {
             }
 
             if (foundCountries.size() == 1) {
-                String singleCountry = foundCountries.get(0);
+                String singleCountry = foundCountries.getFirst();
                 if (ALLOWED_COUNTRIES.contains(singleCountry)) {
                     return singleCountry;
                 }
