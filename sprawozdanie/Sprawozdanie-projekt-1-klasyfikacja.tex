@@ -152,18 +152,49 @@ $v =[$\texttt{trade}, \texttt{internationalization}, 5.43, 0.65, 15.2, 0.04, 0.0
 \end{center}
 
 \section{Miary jakości klasyfikacji}
-Miary jakości klasyfikacji (Accuracy, Precision,
-Recall, F1). We wprowadzeniu zaprezentować minimum teorii potrzebnej do realizacji
-zadania, tak by inżynier innej specjalności zrozumiał dalszy opis. Należy podać {\bf konkretne wzory miar użyte w tym eksperymencie oraz krótko
-opisać ich znaczenie i zakresy przyjmowanych wartości. Należy podać przykładowe
-wartości każdej miary. Nie przepisuj
-teorii, ale podaj link/przypis i opisz jak rozumiesz jej zastosowanie w tym konkretnym
-zadaniu}. \\
-\indent Stosowane wzory, oznaczenia z objaśnieniami znaczenia symboli użytych w
-doświadczeniu. Oznaczenia jednolite w obrębie całego sprawozdania.  Opis zawiera przypisy do bibliografii zgodnie z
-Polską Normą, (zob. materiały BG PŁ).\\
-\noindent {\bf Sekcja uzupełniona jako efekt zadania Tydzień 03 wg Harmonogramu Zajęć
-na WIKAMP KSR.}
+W procesie oceny jakości działania klasyfikatora $k$-NN wykorzystano cztery standardowe miary \cite{jakosci}. Pozwalają one na obiektywną ocenę zdolności modelu do poprawnego przypisywania etykiet dokumentom tekstowym.
+
+Przyjęto następujące oznaczenia dla danej klasy $k$:
+\begin{itemize}
+    \item $TP_k$ (True Positives) – liczba dokumentów z klasy $k$, które zostały poprawnie zaklasyfikowane do klasy $k$,
+    \item $FP_k$ (False Positives) – liczba dokumentów spoza klasy $k$, które zostały błędnie zaklasyfikowane do klasy $k$,
+    \item $FN_k$ (False Negatives) – liczba dokumentów z klasy $k$, które zostały błędnie zaklasyfikowane do innej klasy,
+    \item $N$ – całkowita liczba dokumentów w zbiorze testowym.
+\end{itemize}
+
+\subsection{Accuracy (Dokładność)}
+Accuracy określa ogólną skuteczność klasyfikatora jako stosunek liczby poprawnych decyzji do wszystkich podjętych decyzji:
+\begin{equation}
+    Accuracy = \frac{\sum_{k} TP_k}{N}
+\end{equation}
+Miara przyjmuje wartości z zakresu $[0, 1]$, gdzie 1 oznacza bezbłędną klasyfikację.
+Przykład: $Accuracy = 0{,}85$ (85\% poprawnych trafień).
+
+\subsection{Precision (Precyzja)}
+Precyzja dla danej klasy $k$ określa, jaka część dokumentów zaklasyfikowanych do tej klasy faktycznie do niej należy:
+\begin{equation}
+    Precision_k = \frac{TP_k}{TP_k + FP_k}
+\end{equation}
+Wysoka precyzja oznacza małą liczbę błędów typu False Positive.
+Przykład: $Precision_{\texttt{usa}} = 0{,}92$.
+
+\subsection{Recall (Pełność/Czułość)}
+Pełność dla danej klasy $k$ określa, jaką część dokumentów z danej klasy udało się poprawnie wykryć:
+\begin{equation}
+    Recall_k = \frac{TP_k}{TP_k + FN_k}
+\end{equation}
+Wysoka pełność oznacza małą liczbę błędów typu False Negative.
+Przykład: $Recall_{\texttt{usa}} = 0{,}88$.
+
+\subsection{Miara F1}
+Miara F1 jest średnią harmoniczną precyzji i pełności. Pozwala na ocenę balansu między tymi dwiema miarami:
+\begin{equation}
+    F1_k = 2 \cdot \frac{Precision_k \cdot Recall_k}{Precision_k + Recall_k}
+\end{equation}
+Jest szczególnie użyteczna w przypadku zbiorów o nierównomiernym rozkładzie klas.
+Przykład: $F1_{\texttt{usa}} = 0{,}90$.
+
+Dla całego zbioru (wyniki ogólne) stosowana jest średnia arytmetyczna miar cząstkowych dla wszystkich klas (tzw. średnia makro).
 
 
 \section{Metryki i miary podobieństwa tekstów w klasyfikacji}
@@ -171,11 +202,11 @@ Wzory, znaczenia i opisy symboli zastosowanych metryk z
 przykładami. Wzory, opisy i znaczenia miar
 podobieństwa tekstów zastosowanych w obliczaniu metryk dla wektorów cech z
 przykładami dla każdej miary \cite{niewiadomski08}.  Oznaczenia jednolite w obrębie całego sprawozdania.  {\bf Podaj metryki i miary
-podobieństwa nie z literatury (te wystarczy zacytować linkiem), ale konkretne ich
-postaci stosowane w zadaniu. Jakie zakresy wartości przyjmują te miary i
-metryki, co oznaczają ich wartości? Podaj przykładowe wartości dla przykładowych wektorów cech}. \\
+	podobieństwa nie z literatury (te wystarczy zacytować linkiem), ale konkretne ich
+	postaci stosowane w zadaniu. Jakie zakresy wartości przyjmują te miary i
+	metryki, co oznaczają ich wartości? Podaj przykładowe wartości dla przykładowych wektorów cech}. \\
 \noindent {\bf Sekcja uzupełniona jako efekt zadania Tydzień 04 wg Harmonogramu Zajęć
-na WIKAMP KSR.}
+	na WIKAMP KSR.}
 
 \section{Wyniki klasyfikacji dla różnych parametrów wejściowych}
 Wstępne wyniki miary Accuracy dla próbnych klasyfikacji na ograniczonym zbiorze tekstów (podać parametry i kryteria
@@ -222,231 +253,11 @@ Taunk, Kashvi; De, Sanjukta; Verma, Srishti; Swetapadma, Aleena.
 A Brief Review of Nearest Neighbor Algorithm for Learning and Classification.
 2019, pp. 1255--1260. DOI: 10.1109/ICCS45141.2019.9065747.
 
+\bibitem{jakosci}
+\url{https://www.mimuw.edu.pl/~wjaworski/SU/SU04_miary_jakosci.pdf}
+
 \end{thebibliography}
 
 Literatura zawiera wyłącznie źródła recenzowane i/lub o potwierdzonej wiarygodności,
 możliwe do weryfikacji i cytowane w sprawozdaniu.
-\end{document}\documentclass{article}
-              \usepackage[T1]{fontenc}
-              \usepackage[utf8]{inputenc}
-              \usepackage[polish]{babel}
-              \usepackage{url}
-              \usepackage{amsmath} % Dodano do obslugi wzorow matematycznych
-              \DeclareMathOperator*{\argmax}{arg\,max} % Definicja operatora argmax
-
-              %{Informatyka stosowana 2020, I st., semestr VI}
-
-
-              \author{
-              	Mateusz Kosowski 251558 \\
-              	Nikodem Nowak 251598\\
-              dr inż. Marcin Kacprowicz
-              }
-
-              \title{Komputerowe systemy rozpoznawania 2024/2025\\Projekt 1. Klasyfikacja dokumentów tekstowych}
-              \begin{document}
-              \maketitle
-
-              Opis projektu ma formę artykułu naukowego lub raportu z zadania
-              badawczego (doświadczalnego/obliczeniowego0 (wg indywidualnych potrzeb związanych np. z
-              pracą inżynierską/naukową/zawodową). Kolejne sekcje muszą być numerowane i
-              zatytułowane. Wzory są numerowane, tablice są numerowane i podpisane nad
-              tablicą, rysunki są numerowane i podpisane pod rysunkiem. Podpis rysunku i
-              tabeli musi być wyczerpujący (nie ogólnikowy), aby czytelnik nie musiał sięgać do tekstu, aby go
-              zrozumieć.\\
-              \indent {\bf Limit stron sprawozdania: 20. Nie zmieniać parametrów tekstu
-              (czcionki, marginesów, interlinii, itp.). Istotne dla sprawozdania rysunki,
-              tabele, informacje, kody itp. można umieścić w załącznikach, które nie wliczają
-              się do limitu stron.}\\
-              \indent {\bf Wybrane sekcje (rozdziały sprawozdania) są uzupełniane wg wymagań w
-              opisie Projektu 1. i Harmonogramie Zajęć na WIKAMP KSR jako efekty zadań w~poszczególnych tygodniach}.
-
-              \section{Cel projektu}
-              Badania będą prowadzone na gotowym zbiorze tekstów Reuters-21578 \cite{reuters}.
-              W celu przeprowadzenia obserwacji oraz wyciągnięcia wniosków zostanie napisana aplikacja.
-              Jej zadaniem będzie ekstrakcja konkretnych cech tekstu, zamiana ich na wektory a następnie klasyfikacja w kategorii places,
-              z możliwymi etykietami: west-germany, usa, france, uk, canada albo japan.
-
-
-              \section{Klasyfikacja nadzorowana metodą $k$-NN. Ekstrakcja cech, wektory cech}
-
-              \subsection{Zasada działania metody $k$-NN}
-              Algorytm $k$-NN (k najbliższych sąsiadów) \cite{knn} działa tak, że dla nowego, nieznanego dokumentu:
-              \begin{enumerate}
-              	\item Szuka w bazie $k$ tekstów najbardziej podobnych (najmniejsza odległość między wektorami cech).
-              	\item Sprawdza, do jakich kategorii należą znalezieni sąsiedzi.
-              	\item Przypisuje dokumentowi klasę najczęściej występującą wśród sąsiadów (głosowanie). W przypadku remisu stosuje odpowiednią metodę rozstrzygania.
-              \end{enumerate}
-
-              \subsection{Parametry wejściowe}
-              \begin{itemize}
-              	\item Wartość $k$ (liczba sąsiadów).
-              	\item Proporcje podziału tekstów na zbiór uczący i testowy (np. 60/40).
-              	\item Wybrane cechy oraz metryka odległości (np. euklidesowa).
-              \end{itemize}
-
-              \subsection{Wyniki i rezultaty}
-              Program dla każdego tekstu testowego zwraca przewidywaną etykietę (np. \texttt{usa}). Na podstawie porównania tych przewidywań z rzeczywistymi kategoriami, program oblicza ostateczne wyniki w postaci czterech miar jakości:
-              \begin{itemize}
-              	\item \textbf{Accuracy} (dokładność) – liczona dla całego zbioru dokumentów,
-              	\item \textbf{Precision} (precyzja) – liczona dla całego zbioru oraz oddzielnie dla każdej z 6 klas,
-              	\item \textbf{Recall} (czułość) – również dla całego zbioru i wybranych klas,
-              	\item \textbf{F1} – średnia harmoniczna miar Precision i Recall.
-              \end{itemize}
-              Dzięki tym parametrom można obiektywnie ocenić, jak dobrze model radzi sobie z przypisywaniem tekstów do odpowiednich państw.
-
-              \subsection{Wyodrębnione cechy (wektory cech)}
-              Dla każdego analizowanego dokumentu wyodrębniono wektor 10 cech (2 tekstowe i 8 liczbowych). Aby ułatwić zapis matematyczny, przyjęto następujące oznaczenia dla pojedynczego dokumentu:
-              \begin{itemize}
-                  \item $W$ – zbiór wszystkich słów w dokumencie, a $n = |W|$ to ich całkowita liczba,
-                  \item $Z$ – zbiór wszystkich zdań, a $m = |Z|$ to ich całkowita liczba,
-                  \item $C$ – zbiór wszystkich znaków w tekście, a $k = |C|$ to całkowita liczba znaków,
-                  \item $|x|$ – operator oznaczający długość elementu $x$ (np. liczbę liter w słowie).
-              \end{itemize}
-
-              Poniżej przedstawiono definicje poszczególnych cech wektora:
-
-              \begin{enumerate}
-              	\item \textbf{Najczęściej występujące słowo} (Most Frequent Word) – wartość tekstowa. Niech $W'$ będzie zbiorem słów po usunięciu tzw. stop-words (spójników, przyimków). Funkcja szuka słowa $w$, które maksymalizuje liczbę swoich wystąpień $\text{count}(w)$:
-              	\begin{equation}
-              	    c_1 = \max_{w \in W'} (\text{count}(w))
-              	\end{equation}
-              	Przykład: \texttt{trade}.
-
-              	\item \textbf{Najdłuższe słowo} (Longest Word) – wartość tekstowa. Słowo $w \in W$, dla którego liczba liter $|w|$ jest największa:
-              	\begin{equation}
-              	    c_2 = \max_{w \in W} (|w|)
-              	\end{equation}
-              	Przykład: \texttt{internationalization}.
-
-              	\item \textbf{Średnia długość słowa} (Average Word Length) – wartość liczbowa. Suma długości wszystkich słów podzielona przez ich liczbę:
-              	\begin{equation}
-              	    c_3 = \frac{1}{n} \sum_{i=1}^{n} |w_i|
-              	\end{equation}
-              	Przykład: 5{,}43.
-
-              	\item \textbf{Bogactwo słownictwa} (Vocabulary Richness) – wartość liczbowa. Stosunek liczby unikalnych słów do wszystkich słów w dokumencie. Niech $U \subseteq W$ będzie zbiorem słów unikalnych:
-              	\begin{equation}
-              	    c_4 = \frac{|U|}{n}
-              	\end{equation}
-              	Przykład: 0{,}65.
-
-              	\item \textbf{Średnia długość zdania} (Average Sentence Length) – wartość liczbowa. Średnia liczba słów przypadająca na jedno zdanie:
-              	\begin{equation}
-              	    c_5 = \frac{n}{m}
-              	\end{equation}
-              	Przykład: 15{,}2.
-
-              	\item \textbf{Stosunek wielkich liter} (Uppercase Letter Ratio) – wartość liczbowa. Odsetek znaków, które są wielkimi literami. Jeśli $C_{\text{upper}}$ to zbiór wielkich liter w tekście:
-              	\begin{equation}
-              	    c_6 = \frac{|C_{\text{upper}}|}{k}
-              	\end{equation}
-              	Przykład: 0{,}04.
-
-              	\item \textbf{Zagęszczenie znaków finansowych} (Financial/Numerical Sign Density) – wartość liczbowa. Odsetek znaków specjalnych związanych z finansami (np. \$, \%, \pounds). Jeśli $C_{\text{fin}}$ to zbiór takich znaków w tekście:
-              	\begin{equation}
-              	    c_7 = \frac{|C_{\text{fin}}|}{k}
-              	\end{equation}
-              	Przykład: 0{,}012.
-
-              	\item \textbf{Indeks czytelności Flescha} (Flesch Reading Ease Index) – wartość liczbowa. Wzór oceniający trudność tekstu w jęz. angielskim, gdzie $L_{\text{sylab}}$ to całkowita liczba sylab w tekście:
-              	\begin{equation}
-              	    c_8 = 206{,}835 - 1{,}015 \cdot \left(\frac{n}{m}\right) - 84{,}6 \cdot \left(\frac{L_{\text{sylab}}}{n}\right)
-              	\end{equation}
-              	Przykład: 60{,}5.
-
-              	\item \textbf{Stosunek samogłosek do spółgłosek} (Vowel to Consonant Ratio) – wartość liczbowa. Niech $V$ to liczba samogłosek, a $C_{\text{cons}}$ to liczba spółgłosek:
-              	\begin{equation}
-              	    c_9 = \frac{V}{C_{\text{cons}}}
-              	\end{equation}
-              	Przykład: 0{,}73.
-
-              	\item \textbf{Suma wartości liczbowych} (Sum of All Numerical Values) – wartość liczbowa. Suma matematyczna wszystkich liczb wyciągniętych z treści. Niech $Num$ będzie zbiorem wszystkich wartości liczbowych:
-              	\begin{equation}
-              	    c_{10} = \sum_{x \in Num} x
-              	\end{equation}
-              	Przykład: 105{,}5.
-              \end{enumerate}
-
-              \subsection{Przykład wektora cech}
-              Zgodnie z opisanymi wyżej wzorami, wyekstrahowany wektor $v$ może przyjąć następującaci postać:
-              \begin{center}
-              $v =[$\texttt{trade}, \texttt{internationalization}, 5.43, 0.65, 15.2, 0.04, 0.012, 60.5, 0.73, 105.5$]$
-              \end{center}
-
-              \section{Miary jakości klasyfikacji}
-              Miary jakości klasyfikacji (Accuracy, Precision,
-              Recall, F1). We wprowadzeniu zaprezentować minimum teorii potrzebnej do realizacji
-              zadania, tak by inżynier innej specjalności zrozumiał dalszy opis. Należy podać {\bf konkretne wzory miar użyte w tym eksperymencie oraz krótko
-              opisać ich znaczenie i zakresy przyjmowanych wartości. Należy podać przykładowe
-              wartości każdej miary. Nie przepisuj
-              teorii, ale podaj link/przypis i opisz jak rozumiesz jej zastosowanie w tym konkretnym
-              zadaniu}. \\
-              \indent Stosowane wzory, oznaczenia z objaśnieniami znaczenia symboli użytych w
-              doświadczeniu. Oznaczenia jednolite w obrębie całego sprawozdania.  Opis zawiera przypisy do bibliografii zgodnie z
-              Polską Normą, (zob. materiały BG PŁ).\\
-              \noindent {\bf Sekcja uzupełniona jako efekt zadania Tydzień 03 wg Harmonogramu Zajęć
-              na WIKAMP KSR.}
-
-
-              \section{Metryki i miary podobieństwa tekstów w klasyfikacji}
-              Wzory, znaczenia i opisy symboli zastosowanych metryk z
-              przykładami. Wzory, opisy i znaczenia miar
-              podobieństwa tekstów zastosowanych w obliczaniu metryk dla wektorów cech z
-              przykładami dla każdej miary \cite{niewiadomski08}.  Oznaczenia jednolite w obrębie całego sprawozdania.  {\bf Podaj metryki i miary
-              podobieństwa nie z literatury (te wystarczy zacytować linkiem), ale konkretne ich
-              postaci stosowane w zadaniu. Jakie zakresy wartości przyjmują te miary i
-              metryki, co oznaczają ich wartości? Podaj przykładowe wartości dla przykładowych wektorów cech}. \\
-              \noindent {\bf Sekcja uzupełniona jako efekt zadania Tydzień 04 wg Harmonogramu Zajęć
-              na WIKAMP KSR.}
-
-              \section{Wyniki klasyfikacji dla różnych parametrów wejściowych}
-              Wstępne wyniki miary Accuracy dla próbnych klasyfikacji na ograniczonym zbiorze tekstów (podać parametry i kryteria
-              wyboru wg punktów 3.-8. z opisu Projektu 1.).
-              \noindent {\bf Sekcja uzupełniona jako efekt zadania Tydzień 05 wg Harmonogramu Zajęć
-              na WIKAMP KSR.}
-
-
-              \section{Dyskusja, wnioski, sprawozdanie końcowe}
-              We wnioskach z badania skomentować wyłącznie wpływ parametrów i cech na jakość procesu klasyfikacji. Innymi słowy – wnioski to to, co wynika z przeprowadzonych obliczeń, a nie to co wiadomo z literatury.
-              Znaczenie kolejnych eksperymentów wg punktów 2.-8. opisu projektu 1.  Każdorazowo
-              podane parametry, dla których przeprowadzana eksperyment.
-              Wykresy (np. słupkowe) i tabele wyników
-              obowiązkowe, dokładnie opisane w ,,captions'' (tytułach), konieczny opis osi i
-              jednostek wykresów oraz kolumn i wierszy tabel.\\
-
-              {**Ewentualne wyniki realizacji punktu 9. opisu Projektu 1., czyli ,,na ocenę 5.0'' i ich porównanie do wyników z
-              części obowiązkowej**.Dokładne interpretacje uzyskanych wyników w zależności od parametrów klasyfikacji
-              opisanych w punktach 3.-8 opisu Projektu 1.
-              Omówić i wyjaśnić napotkane problemy (jeśli były). Każdy wniosek/problem powinien mieć poparcie
-              w przeprowadzonych eksperymentach (odwołania do konkretnych wyników: wykresów,
-              tabel). \\
-              \underline{Dla końcowej oceny jest to najważniejsza sekcja} sprawozdania, gdyż prezentuje poziom
-              zrozumienia rozwiązywanego problemu.\\
-
-              ** Możliwości kontynuacji prac w obszarze systemów rozpoznawania, zwłaszcza w kontekście pracy inżynierskiej,
-              magisterskiej, naukowej, itp. **\\
-
-              \noindent {\bf Sekcja uzupełniona jako efekt zadań Tydzień 05 i Tydzień 06 wg Harmonogramu Zajęć
-              na WIKAMP KSR.}
-
-
-              \section{Braki w realizacji projektu 1.}
-              Wymienić wg opisu Projektu 1. wszystkie niezrealizowane obowiązkowe elementy projektu, ewentualnie
-              podać merytoryczne (ale nie czasowe) przyczyny tych braków.
-
-              \begin{thebibliography}{0}
-
-              \bibitem{reuters}
-              \url{http://archive.ics.uci.edu/dataset/137/reuters+21578+text+categorization+collection}
-
-              \bibitem{knn}
-              Taunk, Kashvi; De, Sanjukta; Verma, Srishti; Swetapadma, Aleena.
-              A Brief Review of Nearest Neighbor Algorithm for Learning and Classification.
-              2019, pp. 1255--1260. DOI: 10.1109/ICCS45141.2019.9065747.
-
-              \end{thebibliography}
-
-              Literatura zawiera wyłącznie źródła recenzowane i/lub o potwierdzonej wiarygodności,
-              możliwe do weryfikacji i cytowane w sprawozdaniu.
-              \end{document}
+\end{document}

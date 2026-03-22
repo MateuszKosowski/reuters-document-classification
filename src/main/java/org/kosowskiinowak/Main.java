@@ -64,28 +64,23 @@ public class Main {
         TextSimilarityService textService = new TextSimilarityService();
         Metric metric = new EuclideanMetric(textService);
 
-        System.out.println("Rozpoczynanie klasyfikacji k-NN (k=" + k + ")...");
+        System.out.println("Rozpoczynanie klasyfikacji k-NN (k=" + k + ", metryka=" + metric.getClass().getSimpleName() + ")...");
 
-        int correctPredictions = 0;
+        QualityMeasureService qualityService = new QualityMeasureService();
+        List<QualityMeasureService.ClassificationResult> results = new ArrayList<>();
+
         long startTime = System.currentTimeMillis();
 
         for (FeatureVector testVector : testSet) {
             String actualLabel = testVector.label();
             String predictedLabel = classifier.classify(testVector, trainingSet, k, metric);
-
-            if (predictedLabel.equals(actualLabel)) {
-                correctPredictions++;
-            }
+            results.add(new QualityMeasureService.ClassificationResult(actualLabel, predictedLabel));
         }
 
         long endTime = System.currentTimeMillis();
 
         // 6. PREZENTACJA WYNIKÓW
-        double accuracy = (double) correctPredictions / testSet.size();
-
-        System.out.println("\n--- WYNIKI KLASYFIKACJI ---");
-        System.out.printf("Accuracy: %.2f%%\n", accuracy * 100);
+        qualityService.printReport(results);
         System.out.println("Czas wykonania: " + (endTime - startTime) + " ms");
-        System.out.println("Poprawne trafienia: " + correctPredictions + " z " + testSet.size());
     }
 }
