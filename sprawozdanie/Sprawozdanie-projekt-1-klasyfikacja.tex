@@ -72,7 +72,7 @@ Dla każdego analizowanego dokumentu wyodrębniono wektor 10 cech (2 tekstowe i 
 \begin{itemize}
     \item $W$ – zbiór wszystkich słów w dokumencie, a $n = |W|$ to ich całkowita liczba,
     \item $Z$ – zbiór wszystkich zdań w dokumencie, a $m = |Z|$ to ich całkowita liczba,
-    \item $C$ – zbiór wszystkich znaków w dokumencie, a $k = |C|$ to ich całkowita liczba,
+    \item $C$ – zbiór wszystkich znaków w dokumencie, a $u = |C|$ to ich całkowita liczba,
     \item $|x|$ – operator oznaczający: \begin{itemize}
                                             \item liczebność zbioru $x$, gdy $x$ jest zbiorem,
                                             \item długość elementu $x$, gdy $x$ jest ciągiem (np. liczbę liter w słowie).
@@ -116,13 +116,13 @@ Poniżej przedstawiono definicje poszczególnych cech wektora:
 
 	\item \textbf{Stosunek wielkich liter} (Uppercase Letter Ratio) – wartość liczbowa. Odsetek znaków, które są wielkimi literami. Jeśli $C_{\text{upper}}$ to zbiór wielkich liter w tekście:
 	\begin{equation}
-	    c_6 = \frac{|C_{\text{upper}}|}{k}
+	    c_6 = \frac{|C_{\text{upper}}|}{u}
 	\end{equation}
 	Przykład: 0{,}04.
 
 	\item \textbf{Zagęszczenie znaków finansowych} (Financial/Numerical Sign Density) – wartość liczbowa. Odsetek znaków specjalnych związanych z finansami (np. \$, \%, \pounds). Jeśli $C_{\text{fin}}$ to zbiór takich znaków w tekście:
 	\begin{equation}
-	    c_7 = \frac{|C_{\text{fin}}|}{k}
+	    c_7 = \frac{|C_{\text{fin}}|}{u}
 	\end{equation}
 	Przykład: 0{,}012.
 
