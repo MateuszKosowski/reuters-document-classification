@@ -36,3 +36,7 @@ build/
 
 ### Mac OS ###
 .DS_Store
+/LaTexFiles/Sprawozdanie-projekt-1-klasyfikacja.aux
+/LaTexFiles/Sprawozdanie-projekt-1-klasyfikacja.log
+/LaTexFiles/Sprawozdanie-projekt-1-klasyfikacja.pdf
+/LaTexFiles/Sprawozdanie-projekt-1-klasyfikacja.synctex(busy)
