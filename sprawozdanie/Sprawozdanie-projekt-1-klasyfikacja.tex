@@ -71,9 +71,12 @@ Dzięki tym parametrom można obiektywnie ocenić, jak dobrze model radzi sobie 
 Dla każdego analizowanego dokumentu wyodrębniono wektor 10 cech (2 tekstowe i 8 liczbowych). Aby ułatwić zapis matematyczny, przyjęto następujące oznaczenia dla pojedynczego dokumentu:
 \begin{itemize}
     \item $W$ – zbiór wszystkich słów w dokumencie, a $n = |W|$ to ich całkowita liczba,
-    \item $Z$ – zbiór wszystkich zdań, a $m = |Z|$ to ich całkowita liczba,
-    \item $C$ – zbiór wszystkich znaków w tekście, a $k = |C|$ to całkowita liczba znaków,
-    \item $|x|$ – operator oznaczający długość elementu $x$ (np. liczbę liter w słowie).
+    \item $Z$ – zbiór wszystkich zdań w dokumencie, a $m = |Z|$ to ich całkowita liczba,
+    \item $C$ – zbiór wszystkich znaków w dokumencie, a $k = |C|$ to ich całkowita liczba,
+    \item $|x|$ – operator oznaczający: \begin{itemize}
+                                            \item liczebność zbioru $x$, gdy $x$ jest zbiorem,
+                                            \item długość elementu $x$, gdy $x$ jest ciągiem (np. liczbę liter w słowie).
+                                        \end{itemize}
 \end{itemize}
 
 Poniżej przedstawiono definicje poszczególnych cech wektora:
@@ -91,11 +94,13 @@ Poniżej przedstawiono definicje poszczególnych cech wektora:
 	\end{equation}
 	Przykład: \texttt{internationalization}.
 
-	\item \textbf{Średnia długość słowa} (Average Word Length) – wartość liczbowa. Suma długości wszystkich słów podzielona przez ich liczbę:
-	\begin{equation}
-	    c_3 = \frac{1}{n} \sum_{i=1}^{n} |w_i|
-	\end{equation}
-	Przykład: 5{,}43.
+    \item \textbf{Średnia długość słowa} (Average Word Length) – wartość liczbowa.
+    Średnia długość słowa jest definiowana jako:
+    \begin{equation}
+        c_3 = \frac{1}{n} \sum_{i=1}^{n} |w_i|
+    \end{equation}
+    gdzie $|w_i|$ oznacza długość $i$-tego słowa wyrażoną liczbą znaków.\\
+    Przykład: 5{,}43.
 
 	\item \textbf{Bogactwo słownictwa} (Vocabulary Richness) – wartość liczbowa. Stosunek liczby unikalnych słów do wszystkich słów w dokumencie. Niech $U \subseteq W$ będzie zbiorem słów unikalnych:
 	\begin{equation}
