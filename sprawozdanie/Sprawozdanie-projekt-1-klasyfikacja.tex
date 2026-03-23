@@ -198,15 +198,158 @@ Dla całego zbioru (wyniki ogólne) stosowana jest średnia arytmetyczna miar cz
 
 
 \section{Metryki i miary podobieństwa tekstów w klasyfikacji}
-Wzory, znaczenia i opisy symboli zastosowanych metryk z
-przykładami. Wzory, opisy i znaczenia miar
-podobieństwa tekstów zastosowanych w obliczaniu metryk dla wektorów cech z
-przykładami dla każdej miary \cite{niewiadomski08}.  Oznaczenia jednolite w obrębie całego sprawozdania.  {\bf Podaj metryki i miary
-	podobieństwa nie z literatury (te wystarczy zacytować linkiem), ale konkretne ich
-	postaci stosowane w zadaniu. Jakie zakresy wartości przyjmują te miary i
-	metryki, co oznaczają ich wartości? Podaj przykładowe wartości dla przykładowych wektorów cech}. \\
-\noindent {\bf Sekcja uzupełniona jako efekt zadania Tydzień 04 wg Harmonogramu Zajęć
-	na WIKAMP KSR.}
+W implementacji klasyfikatora porównywane są pełne wektory cech
+\begin{equation}
+    v^{(A)} = [c_1^{(A)}, c_2^{(A)}, \ldots, c_{10}^{(A)}], \qquad
+    v^{(B)} = [c_1^{(B)}, c_2^{(B)}, \ldots, c_{10}^{(B)}],
+\end{equation}
+gdzie zgodnie z oznaczeniami z sekcji 2 cechy $c_1$ i $c_2$ są tekstowe, natomiast
+$c_3,\ldots,c_{10}$ są liczbowe. W kodzie cechy liczbowe są najpierw normalizowane metodą
+min--max, a następnie do obliczenia odległości między wektorami stosowana jest jedna z
+trzech metryk wymaganych w projekcie: euklidesowa, uliczna lub Czebyszewa. Dla dwóch cech
+tekstowych wykorzystywana jest miara podobieństwa oparta na 2-gramach znakowych i
+współczynniku Sørensena-Dice'a \cite{gomaa13,dice45,sorensen48}.
+
+\subsection{Normalizacja cech liczbowych}
+Dla każdej cechy liczbowej $c_i$, gdzie $i \in \{3,\ldots,10\}$, przed klasyfikacją
+wyznaczana jest wartość znormalizowana:
+\begin{equation}
+    \tilde{c}_i = \frac{c_i - c_i^{\min}}{c_i^{\max} - c_i^{\min}}
+\end{equation}
+gdzie $c_i^{\min}$ i $c_i^{\max}$ oznaczają odpowiednio najmniejszą i największą wartość
+cechy $c_i$ w zbiorze wektorów użytych do klasyfikacji. Jeśli dla danej cechy
+$c_i^{\max} = c_i^{\min}$, to implementacja przyjmuje $\tilde{c}_i = 0$.
+
+Po takiej normalizacji każda cecha liczbowa przyjmuje wartości z przedziału $[0,1]$.
+W dalszej części sekcji, dla uproszczenia zapisu, symbole $c_3,\ldots,c_{10}$ oznaczają już
+wartości po normalizacji. Dzięki temu żadna z cech liczbowych nie dominuje odległości tylko
+dlatego, że była wyrażona w większej skali liczbowej.
+
+\subsection{Miara podobieństwa dla cech tekstowych}
+Niech $G_2(s)$ oznacza zbiór wszystkich różnych 2-gramów (bigramów) napisu $s$. W
+implementacji dla dwóch tekstowych wartości cechy $s^{(A)}$ i $s^{(B)}$ obliczana jest
+najpierw miara podobieństwa Sørensena-Dice'a:
+\begin{equation}
+    Sim_{SD}(s^{(A)}, s^{(B)}) =
+    \frac{2 \cdot |G_2(s^{(A)}) \cap G_2(s^{(B)})|}{|G_2(s^{(A)})| + |G_2(s^{(B)})|}
+\end{equation}
+Następnie podobieństwo to jest zamieniane na odległość:
+\begin{equation}
+    d_{\text{text}}(s^{(A)}, s^{(B)}) = 1 - Sim_{SD}(s^{(A)}, s^{(B)})
+\end{equation}
+
+Miara $Sim_{SD}$ przyjmuje wartości z przedziału $[0,1]$. Wartość $1$ oznacza identyczne
+zbiory 2-gramów, a wartość $0$ oznacza brak wspólnych 2-gramów. Odpowiadająca jej odległość
+$d_{\text{text}}$ również należy do przedziału $[0,1]$, ale ma interpretację odwrotną:
+$0$ oznacza pełną zgodność, a $1$ maksymalną różnicę. W obecnej implementacji parametr
+$n$ jest stały i równy $2$, a dla napisów krótszych niż dwa znaki funkcja zwraca podobieństwo
+$0$, a więc odległość równą $1$.
+
+Przykład dla pierwszej cechy tekstowej:
+\begin{equation}
+    G_2(\texttt{trade}) = \{\texttt{tr}, \texttt{ra}, \texttt{ad}, \texttt{de}\}
+\end{equation}
+\begin{equation}
+    G_2(\texttt{grade}) = \{\texttt{gr}, \texttt{ra}, \texttt{ad}, \texttt{de}\}
+\end{equation}
+Wspólne 2-gramy to $\{\texttt{ra}, \texttt{ad}, \texttt{de}\}$, zatem:
+\begin{equation}
+    Sim_{SD}(\texttt{trade}, \texttt{grade}) = \frac{2 \cdot 3}{4 + 4} = 0{,}75
+\end{equation}
+\begin{equation}
+    d_{\text{text}}(\texttt{trade}, \texttt{grade}) = 1 - 0{,}75 = 0{,}25
+\end{equation}
+
+\subsection{Metryka euklidesowa}
+Niech
+\begin{equation}
+    \delta_1 = d_{\text{text}}(c_1^{(A)}, c_1^{(B)}), \qquad
+    \delta_2 = d_{\text{text}}(c_2^{(A)}, c_2^{(B)})
+\end{equation}
+oznaczają odległości dla dwóch cech tekstowych. Wtedy metryka euklidesowa przyjmuje postać:
+\begin{equation}
+    d_E(v^{(A)}, v^{(B)}) =
+    \sqrt{\delta_1^2 + \delta_2^2 + \sum_{i=3}^{10} \left(c_i^{(A)} - c_i^{(B)}\right)^2}
+\end{equation}
+W bieżącej implementacji $d_E \in [0,\sqrt{10}]$, ponieważ każdy z dziesięciu składników
+wektora może różnić się co najwyżej o $1$. Wartość $0$ oznacza identyczne wektory cech,
+natomiast wartości bliższe $\sqrt{10} \approx 3{,}1623$ oznaczają bardzo duże różnice między
+dokumentami w wielu składowych jednocześnie. Metryka euklidesowa silniej akcentuje kilka
+większych rozbieżności niż wiele bardzo małych różnic.
+
+\subsection{Metryka uliczna (Manhattan)}
+Metryka uliczna jest sumą modułów różnic wszystkich składowych:
+\begin{equation}
+    d_M(v^{(A)}, v^{(B)}) =
+    \delta_1 + \delta_2 + \sum_{i=3}^{10} \left|c_i^{(A)} - c_i^{(B)}\right|
+\end{equation}
+W bieżącej implementacji $d_M \in [0,10]$. Wartość $0$ oznacza pełną zgodność obu wektorów,
+a wartość bliska $10$ oznacza, że większość cech różni się maksymalnie. Metryka uliczna
+traktuje wkład każdej cechy liniowo, dzięki czemu jest mniej wrażliwa na pojedyncze duże
+odchylenie niż metryka euklidesowa.
+
+\subsection{Metryka Czebyszewa}
+Metryka Czebyszewa bierze pod uwagę wyłącznie największą różnicę między odpowiadającymi sobie
+składowymi:
+\begin{equation}
+    d_C(v^{(A)}, v^{(B)}) = \max
+    \left\{
+        \delta_1, \delta_2,
+        \left|c_3^{(A)} - c_3^{(B)}\right|,
+        \ldots,
+        \left|c_{10}^{(A)} - c_{10}^{(B)}\right|
+    \right\}
+\end{equation}
+W bieżącej implementacji $d_C \in [0,1]$. Wartość $0$ oznacza identyczne dokumenty, natomiast
+wartość bliska $1$ oznacza, że istnieje przynajmniej jedna cecha, dla której dokumenty bardzo
+silnie się różnią. Metryka ta ignoruje sumaryczny efekt wielu małych różnic i koncentruje się
+na największym rozbieżnym wymiarze.
+
+\subsection{Przykład dla dwóch wektorów cech}
+Dla zilustrowania działania metryk rozważmy dwa przykładowe, już znormalizowane wektory:
+\begin{equation}
+    v^{(A)} = [\texttt{trade}, \texttt{market}, 0{,}40, 0{,}65, 0{,}55, 0{,}10, 0{,}12, 0{,}70, 0{,}60, 0{,}30]
+\end{equation}
+\begin{equation}
+    v^{(B)} = [\texttt{grade}, \texttt{marker}, 0{,}60, 0{,}50, 0{,}35, 0{,}08, 0{,}10, 0{,}65, 0{,}58, 0{,}40]
+\end{equation}
+
+Dla pierwszej cechy tekstowej otrzymano już $\delta_1 = 0{,}25$. Dla drugiej cechy tekstowej
+mamy:
+\begin{equation}
+    G_2(\texttt{market}) = \{\texttt{ma}, \texttt{ar}, \texttt{rk}, \texttt{ke}, \texttt{et}\}
+\end{equation}
+\begin{equation}
+    G_2(\texttt{marker}) = \{\texttt{ma}, \texttt{ar}, \texttt{rk}, \texttt{ke}, \texttt{er}\}
+\end{equation}
+\begin{equation}
+    Sim_{SD}(\texttt{market}, \texttt{marker}) = \frac{2 \cdot 4}{5 + 5} = 0{,}8
+\end{equation}
+\begin{equation}
+    \delta_2 = d_{\text{text}}(\texttt{market}, \texttt{marker}) = 1 - 0{,}8 = 0{,}2
+\end{equation}
+
+Pozostałe różnice bezwzględne dla cech liczbowych wynoszą odpowiednio:
+$0{,}20$, $0{,}15$, $0{,}20$, $0{,}02$, $0{,}02$, $0{,}05$, $0{,}02$ oraz $0{,}10$. Stąd:
+\begin{equation}
+    d_E(v^{(A)}, v^{(B)}) = \sqrt{0{,}2187} \approx 0{,}468
+\end{equation}
+czyli po zsumowaniu kwadratów wszystkich różnic otrzymujemy wartość $0{,}2187$ pod
+pierwiastkiem.
+\begin{equation}
+    d_M(v^{(A)}, v^{(B)}) = 1{,}21
+\end{equation}
+\begin{equation}
+    d_C(v^{(A)}, v^{(B)}) = 0{,}25
+\end{equation}
+ponieważ największa pojedyncza różnica między składowymi obu wektorów wynosi właśnie
+$0{,}25$.
+
+Otrzymane wartości pokazują różne własności metryk. W tym przykładzie metryka euklidesowa i
+uliczna uwzględniają łączny efekt wszystkich rozbieżności, natomiast metryka Czebyszewa
+zwraca wyłącznie największą pojedynczą różnicę. Dla klasyfikatora $k$-NN oznacza to, że przy
+tym samym zbiorze cech różne metryki mogą prowadzić do innego uporządkowania sąsiadów, a w
+konsekwencji do innej decyzji klasyfikacyjnej.
 
 \section{Wyniki klasyfikacji dla różnych parametrów wejściowych}
 Wstępne wyniki miary Accuracy dla próbnych klasyfikacji na ograniczonym zbiorze tekstów (podać parametry i kryteria
@@ -223,8 +366,8 @@ Wykresy (np. słupkowe) i tabele wyników
 obowiązkowe, dokładnie opisane w ,,captions'' (tytułach), konieczny opis osi i
 jednostek wykresów oraz kolumn i wierszy tabel.\\
 
-{**Ewentualne wyniki realizacji punktu 9. opisu Projektu 1., czyli ,,na ocenę 5.0'' i ich porównanie do wyników z
-części obowiązkowej**.Dokładne interpretacje uzyskanych wyników w zależności od parametrów klasyfikacji
+\textbf{Ewentualne wyniki realizacji punktu 9. opisu Projektu 1., czyli ,,na ocenę 5.0'', i ich porównanie do wyników z
+części obowiązkowej.} Dokładne interpretacje uzyskanych wyników w zależności od parametrów klasyfikacji
 opisanych w punktach 3.-8 opisu Projektu 1.
 Omówić i wyjaśnić napotkane problemy (jeśli były). Każdy wniosek/problem powinien mieć poparcie
 w przeprowadzonych eksperymentach (odwołania do konkretnych wyników: wykresów,
@@ -232,8 +375,8 @@ tabel). \\
 \underline{Dla końcowej oceny jest to najważniejsza sekcja} sprawozdania, gdyż prezentuje poziom
 zrozumienia rozwiązywanego problemu.\\
 
-** Możliwości kontynuacji prac w obszarze systemów rozpoznawania, zwłaszcza w kontekście pracy inżynierskiej,
-magisterskiej, naukowej, itp. **\\
+\textbf{Możliwości kontynuacji prac w obszarze systemów rozpoznawania, zwłaszcza w kontekście pracy inżynierskiej,
+magisterskiej, naukowej, itp.}\\
 
 \noindent {\bf Sekcja uzupełniona jako efekt zadań Tydzień 05 i Tydzień 06 wg Harmonogramu Zajęć
 na WIKAMP KSR.}
@@ -243,7 +386,7 @@ na WIKAMP KSR.}
 Wymienić wg opisu Projektu 1. wszystkie niezrealizowane obowiązkowe elementy projektu, ewentualnie
 podać merytoryczne (ale nie czasowe) przyczyny tych braków.
 
-\begin{thebibliography}{0}
+\begin{thebibliography}{9}
 
 \bibitem{reuters}
 \url{http://archive.ics.uci.edu/dataset/137/reuters+21578+text+categorization+collection}
@@ -255,6 +398,26 @@ A Brief Review of Nearest Neighbor Algorithm for Learning and Classification.
 
 \bibitem{jakosci}
 \url{https://www.mimuw.edu.pl/~wjaworski/SU/SU04_miary_jakosci.pdf}
+
+\bibitem{gomaa13}
+Gomaa, Wael H.; Fahmy, Aly A.
+\emph{A Survey of Text Similarity Approaches}.
+International Journal of Computer Applications, 68(13), 2013, pp. 13--18.
+DOI: 10.5120/11638-7118.
+\url{https://www.ijcaonline.org/archives/volume68/number13/11638-7118/}
+
+\bibitem{dice45}
+Dice, Lee R.
+\emph{Measures of the Amount of Ecologic Association between Species}.
+Ecology, 26(3), 1945, pp. 297--302.
+DOI: 10.2307/1932409.
+\url{https://doi.org/10.2307/1932409}
+
+\bibitem{sorensen48}
+S{\o}rensen, Thorvald.
+\emph{A Method of Establishing Groups of Equal Amplitude in Plant Sociology Based on Similarity of Species Content and Its Application to Analyses of the Vegetation on Danish Commons}.
+Biologiske Skrifter, 5, 1948, pp. 1--34.
+\url{https://search.worldcat.org/title/4713331}
 
 \end{thebibliography}
 
