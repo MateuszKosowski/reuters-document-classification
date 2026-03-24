@@ -4,49 +4,42 @@ import org.kosowskiinowak.classifier.metric.ChebyshevMetric;
 import org.kosowskiinowak.classifier.metric.EuclideanMetric;
 import org.kosowskiinowak.classifier.metric.ManhattanMetric;
 import org.kosowskiinowak.classifier.metric.Metric;
-import org.kosowskiinowak.model.ExperimentParams;
 import org.kosowskiinowak.model.FeatureVector;
 import org.kosowskiinowak.model.SingleArticle;
 import org.kosowskiinowak.service.*;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.IntStream;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class Main {
+    static {
+        System.setProperty("java.util.logging.SimpleFormatter.format", "%4$s: %5$s%n");
+    }
+
+    private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
+
     public static void main(String[] args) {
         String dataSource = "src/main/resources/reuters21578";
 
         // 0. DOSTĘPNE PARAMETRY DO EKSPERYMENTÓW
         long seed = 42;
-        List<Integer> listK = IntStream.rangeClosed(1, 40)
-                .boxed()
-                .toList();
         List<Double> listTrainRatios = List.of(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9);
         List<Metric> listMetrics = List.of(
                 new EuclideanMetric(new TextSimilarityService()),
                 new ManhattanMetric(new TextSimilarityService()),
                 new ChebyshevMetric(new TextSimilarityService())
         );
-        List<ExperimentParams> experiments = listK.stream()
-                .flatMap(k -> listTrainRatios.stream()
-                        .flatMap(trainRatio -> listMetrics.stream()
-                                .map(metric -> new ExperimentParams(k, trainRatio, metric))))
-                .toList();
-        System.out.println("Przygotowano " + experiments.size() + " konfiguracji eksperymentów.");
-
-
 
         // 1. WCZYTYWANIE ARTYKUŁÓW
         ArticleLoader articleLoader = new ArticleLoader();
         List<SingleArticle> rawArticles = articleLoader.loadArticles(dataSource);
-        System.out.println("Załadowano surowych artykułów: " + rawArticles.size());
+        LOGGER.info("Loaded raw articles: " + rawArticles.size());
 
         // 2. EKSTRAKCJA CECH
-        System.out.println("Rozpoczynanie ekstrakcji cech (współbieżnie)...");
+        LOGGER.info("Starting feature extraction (concurrently)...");
         FeatureVectorExtractor extractor = new FeatureVectorExtractor();
         List<FeatureVector> rawVectors = rawArticles.parallelStream()
                 .map(article -> {
@@ -58,30 +51,35 @@ public class Main {
                 })
                 .filter(Objects::nonNull)
                 .toList();
-        System.out.println("Ekstrakcja zakończona (" + rawVectors.size() + " wektorów).");
+        LOGGER.info("Extraction completed (" + rawVectors.size() + " vectors).");
 
         // 3. NORMALIZACJA
         NormalizationService normalizationService = new NormalizationService();
         List<FeatureVector> normalizedVectors = normalizationService.normalize(rawVectors);
-        System.out.println("Normalizacja wektorów zakończona.");
+        LOGGER.info("Vector normalization completed.");
 
         // 4. PRZYGOTOWANIE ZBIORU
         List<FeatureVector> universalDataset = new ArrayList<>(normalizedVectors);
         Collections.shuffle(universalDataset, new Random(seed));
 
-        System.out.println("Rozpoczynanie serii eksperymentów (" + experiments.size() + ")...");
+        record BaseConfig(double trainRatio, Metric metric) {}
+        List<BaseConfig> baseConfigs = listTrainRatios.stream()
+                .flatMap(trainRatio -> listMetrics.stream()
+                        .map(metric -> new BaseConfig(trainRatio, metric)))
+                .toList();
+
+        LOGGER.info("Starting base experiments suite (" + baseConfigs.size() + ") - k will be picked dynamically...");
         long globalStartTime = System.currentTimeMillis();
         AtomicInteger progressCounter = new AtomicInteger(0);
         List<String> csvResults = Collections.synchronizedList(new ArrayList<>());
-        csvResults.add("K;TrainRatio;Metric;Accuracy;Precision;Recall;F1;DurationMs;Status");
+        csvResults.add("K;TrainRatio;Metric;Class;Accuracy;Precision;Recall;F1;DurationMs;Status");
 
-        // 5. URUCHOMIENIE EKSPERYMENTÓW WSPÓŁBIEŻNIE
-        experiments.parallelStream().forEach(param -> {
-            long startTime = System.currentTimeMillis();
+        // 5. URUCHOMIENIE EKSPERYMENTÓW WSPÓŁBIEŻNIE ze zmiennym K
+        int patienceLimit = 5; // Ile kolejnych iteracji bez poprawy accuracy pozwala na zakończenie zwiększania K
 
-            int k = param.k();
-            double trainRatio = param.trainRatio();
-            Metric metric = param.metric();
+        baseConfigs.parallelStream().forEach(config -> {
+            double trainRatio = config.trainRatio();
+            Metric metric = config.metric();
             String metricName = metric.getClass().getSimpleName();
 
             try {
@@ -90,71 +88,74 @@ public class Main {
                 List<FeatureVector> testSet = universalDataset.subList(trainCount, universalDataset.size());
 
                 KnnClassifier classifier = new KnnClassifier();
-
-                // Walidacja k względem zbioru treningowego
-                int maxK = classifier.maxAllowedK(trainingSet);
-                if (k > maxK) {
-                    csvResults.add(String.format(Locale.US, "%d;%.2f;%s;0;0;0;0;0;SKIPPED_K_TOO_LARGE_MAX_%d",
-                            k, trainRatio, metricName, maxK));
-                    return;
-                }
-
                 QualityMeasureService qualityService = new QualityMeasureService();
-                List<QualityMeasureService.ClassificationResult> results = new ArrayList<>();
 
-                for (FeatureVector testVector : testSet) {
-                    String predictedLabel = classifier.classify(testVector, trainingSet, k, metric);
-                    results.add(new QualityMeasureService.ClassificationResult(testVector.label(), predictedLabel));
+                int maxPossibleK = Math.min(6, trainingSet.size()); // Szybki test dla k max 6
+                double bestAccuracy = -1.0;
+                int noImprovementCounter = 0;
+
+                for (int k = 1; k <= maxPossibleK; k++) {
+                    long startTime = System.currentTimeMillis();
+
+                    List<QualityMeasureService.ClassificationResult> results = new ArrayList<>();
+
+                    for (FeatureVector testVector : testSet) {
+                        String predictedLabel = classifier.classify(testVector, trainingSet, k, metric);
+                        results.add(new QualityMeasureService.ClassificationResult(testVector.label(), predictedLabel));
+                    }
+
+                    Map<String, Double> accuracyMap = qualityService.calculateAccuracy(results);
+                    Map<String, Double> precisionMap = qualityService.calculatePrecision(results);
+                    Map<String, Double> recallMap = qualityService.calculateRecall(results);
+                    Map<String, Double> f1Map = qualityService.calculateF1(precisionMap, recallMap);
+
+                    double overallAccuracy = accuracyMap.getOrDefault("Ogólny (Accuracy)", 0.0);
+                    long duration = System.currentTimeMillis() - startTime;
+
+                    for (String className : precisionMap.keySet()) {
+                        if (className.equals("Średnia makro") || className.equals("Ogólny (Accuracy)")) {
+                            continue; // Pomijamy sztuczne klasy zbiorcze
+                        }
+
+                        double classPrecision = precisionMap.getOrDefault(className, 0.0);
+                        double classRecall = recallMap.getOrDefault(className, 0.0);
+                        double classF1 = f1Map.getOrDefault(className, 0.0);
+
+                        String csvLine = String.format(Locale.US, "%d;%.2f;%s;%s;%.4f;%.4f;%.4f;%.4f;%d;OK",
+                                k, trainRatio, metricName, className, overallAccuracy, classPrecision, classRecall, classF1, duration);
+
+                        csvResults.add(csvLine);
+                    }
+
+                    // Sprawdzanie nowej dokładności
+                    if (overallAccuracy > bestAccuracy) {
+                        bestAccuracy = overallAccuracy;
+                        noImprovementCounter = 0; // zresetuj licznik jeśli jest poprawa
+                    } else {
+                        noImprovementCounter++;
+                    }
+
+                    // Early Stopping
+                    if (noImprovementCounter >= patienceLimit) {
+                        break;
+                    }
                 }
-
-                Map<String, Double> accuracyMap = qualityService.calculateAccuracy(results);
-                Map<String, Double> precisionMap = qualityService.calculatePrecision(results);
-                Map<String, Double> recallMap = qualityService.calculateRecall(results);
-                Map<String, Double> f1Map = qualityService.calculateF1(precisionMap, recallMap);
-
-                double accuracy = accuracyMap.getOrDefault("Ogólny (Accuracy)", 0.0);
-                double precision = precisionMap.getOrDefault("Średnia makro", 0.0);
-                double recall = recallMap.getOrDefault("Średnia makro", 0.0);
-                double f1 = f1Map.getOrDefault("Średnia makro", 0.0);
-
-                long duration = System.currentTimeMillis() - startTime;
-
-                String csvLine = String.format(Locale.US, "%d;%.2f;%s;%.4f;%.4f;%.4f;%.4f;%d;OK",
-                        k, trainRatio, metricName, accuracy, precision, recall, f1, duration);
-
-                csvResults.add(csvLine);
-
             } catch (Exception e) {
-                System.err.println("Błąd w eksperymencie [k=" + k + ", ratio=" + trainRatio + "]: " + e.getMessage());
-                csvResults.add(String.format(Locale.US, "%d;%.2f;%s;0;0;0;0;0;ERROR", k, trainRatio, metricName));
+                LOGGER.log(Level.SEVERE, "Error in experiment [ratio=" + trainRatio + ", metric=" + metricName + "]: " + e.getMessage(), e);
+                csvResults.add(String.format(Locale.US, "0;%.2f;%s;0;0;0;0;0;ERROR", trainRatio, metricName));
             } finally {
                 int current = progressCounter.incrementAndGet();
-                if (current % 50 == 0) {
-                    System.out.printf("Ukończono %d / %d eksperymentów (%.1f%%)...\n",
-                            current, experiments.size(), (double)current/experiments.size()*100);
-                }
+                LOGGER.info(String.format(Locale.US, "Completed %d / %d configurations (%.1f%%)...",
+                        current, baseConfigs.size(), (double) current / baseConfigs.size() * 100));
             }
         });
 
         long globalEndTime = System.currentTimeMillis();
-        System.out.println("Wszystkie eksperymenty zakończone w czasie: " + (globalEndTime - globalStartTime) + " ms");
+        LOGGER.info("All experiments completed in: " + (globalEndTime - globalStartTime) + " ms");
 
         // 6. ZAPIS WYNIKÓW DO PLIKU
-        String outputFileName = "wyniki_eksperymentow.csv";
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFileName))) {
-            String header = csvResults.get(0);
-            List<String> dataRows = new ArrayList<>(csvResults.subList(1, csvResults.size()));
-            Collections.sort(dataRows);
-
-            writer.write(header);
-            writer.newLine();
-            for (String line : dataRows) {
-                writer.write(line);
-                writer.newLine();
-            }
-            System.out.println("Pełny raport zapisano do pliku: " + outputFileName);
-        } catch (IOException e) {
-            System.err.println("Błąd zapisu wyników: " + e.getMessage());
-        }
+        String outputFileName = "results.csv";
+        ResultsExportService exportService = new ResultsExportService();
+        exportService.exportToCsv(csvResults, outputFileName);
     }
 }

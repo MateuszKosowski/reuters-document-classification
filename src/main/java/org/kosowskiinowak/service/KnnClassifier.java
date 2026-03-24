@@ -33,14 +33,6 @@ public class KnnClassifier {
             throw new IllegalArgumentException("k musi być >= 1, podano: " + k);
         }
 
-        int kMax = maxAllowedK(trainingSet);
-        if (k > kMax) {
-            throw new IllegalArgumentException(
-                    "k=" + k + " jest za duże. Dla tego zbioru maksymalne sensowne k = " + kMax +
-                    " (2 * najmniejsza klasa + 1). Najmniejsza klasa zawiera " + (kMax - 1) / 2 + " elementów."
-            );
-        }
-
         List<Neighbor> neighbors = new ArrayList<>();
 
         for (FeatureVector trainVector : trainingSet) {
