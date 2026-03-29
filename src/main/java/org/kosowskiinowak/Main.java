@@ -53,14 +53,11 @@ public class Main {
                 .toList();
         LOGGER.info("Extraction completed (" + rawVectors.size() + " vectors).");
 
-        // 3. NORMALIZACJA
-        NormalizationService normalizationService = new NormalizationService();
-        List<FeatureVector> normalizedVectors = normalizationService.normalize(rawVectors);
-        LOGGER.info("Vector normalization completed.");
-
-        // 4. PRZYGOTOWANIE ZBIORU
-        List<FeatureVector> universalDataset = new ArrayList<>(normalizedVectors);
+        // 3. PRZYGOTOWANIE ZBIORU DANYCH (SHUFFLE)
+        List<FeatureVector> universalDataset = new ArrayList<>(rawVectors);
         Collections.shuffle(universalDataset, new Random(seed));
+
+        NormalizationService normalizationService = new NormalizationService();
 
         record BaseConfig(double trainRatio, Metric metric) {}
         List<BaseConfig> baseConfigs = listTrainRatios.stream()
@@ -74,7 +71,7 @@ public class Main {
         List<String> csvResults = Collections.synchronizedList(new ArrayList<>());
         csvResults.add("K;TrainRatio;Metric;Class;Accuracy;Precision;Recall;F1;DurationMs;Status");
 
-        // 5. URUCHOMIENIE EKSPERYMENTÓW WSPÓŁBIEŻNIE ze zmiennym K
+        // 4. URUCHOMIENIE EKSPERYMENTÓW WSPÓŁBIEŻNIE ze zmiennym K
         int patienceLimit = 5; // Ile kolejnych iteracji bez poprawy accuracy pozwala na zakończenie zwiększania K
 
         baseConfigs.parallelStream().forEach(config -> {
@@ -84,8 +81,13 @@ public class Main {
 
             try {
                 int trainCount = (int) (universalDataset.size() * trainRatio);
-                List<FeatureVector> trainingSet = universalDataset.subList(0, trainCount);
-                List<FeatureVector> testSet = universalDataset.subList(trainCount, universalDataset.size());
+                List<FeatureVector> rawTrainingSet = universalDataset.subList(0, trainCount);
+                List<FeatureVector> rawTestSet = universalDataset.subList(trainCount, universalDataset.size());
+
+                // NORMALIZACJA OPARTA O ZBIÓR TRENINGOWY
+                NormalizationService.NormalizationResult normResult = normalizationService.normalizeTrainAndTest(rawTrainingSet, rawTestSet);
+                List<FeatureVector> trainingSet = normResult.normalizedTrain;
+                List<FeatureVector> testSet = normResult.normalizedTest;
 
                 KnnClassifier classifier = new KnnClassifier();
                 QualityMeasureService qualityService = new QualityMeasureService();
@@ -153,7 +155,7 @@ public class Main {
         long globalEndTime = System.currentTimeMillis();
         LOGGER.info("All experiments completed in: " + (globalEndTime - globalStartTime) + " ms");
 
-        // 6. ZAPIS WYNIKÓW DO PLIKU
+        // 5. ZAPIS WYNIKÓW DO PLIKU
         String outputFileName = "results.csv";
         ResultsExportService exportService = new ResultsExportService();
         exportService.exportToCsv(csvResults, outputFileName);
