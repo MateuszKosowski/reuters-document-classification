@@ -51,8 +51,7 @@ public class Main {
 
     private static final int REQUESTED_K_START = 0;
     private static final int FIRST_VALID_K = Math.max(1, REQUESTED_K_START);
-    private static final int CONSECUTIVE_DROPS_TO_STOP = 5;
-    private static final int MAX_K_TO_TEST = 100;
+    private static final int MAX_K_TO_TEST = 30;
 
     private static final double STAGE_ONE_TRAIN_RATIO = 0.50;
     private static final List<Double> SPLIT_RATIOS = List.of(0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90);
@@ -64,35 +63,37 @@ public class Main {
     private static final String BEST_FINAL_FILE = "04-best-final-summary.csv";
 
     public static void main(String[] args) {
-        List<FeatureVector> dataset = loadAndPrepareDataset();
-        if (dataset.size() < 2) {
-            LOGGER.warning("Dataset is too small to run the experiment.");
-            return;
-        }
-
-        List<MetricDefinition> metricDefinitions = createMetricDefinitions();
-        EnumSet<FeatureName> fullFeatureSet = EnumSet.allOf(FeatureName.class);
-
-        ResultsExportService exportService = new ResultsExportService();
-        NormalizationService normalizationService = new NormalizationService();
-        KnnClassifier classifier = new KnnClassifier();
-        QualityMeasureService qualityService = new QualityMeasureService();
-
-        Path outputDirectory = prepareOutputDirectory();
-        int threadPoolSize = Math.max(1, Runtime.getRuntime().availableProcessors());
-        LOGGER.info("Using fixed thread pool size = " + threadPoolSize);
-
-        if (REQUESTED_K_START < FIRST_VALID_K) {
-            LOGGER.info(String.format(
-                    Locale.US,
-                    "Requested start from k=%d, but k-NN requires k >= 1, so stage 1 starts from k=%d.",
-                    REQUESTED_K_START,
-                    FIRST_VALID_K
-            ));
-        }
-
-        ExecutorService executor = Executors.newFixedThreadPool(threadPoolSize);
+        long totalStartMs = System.currentTimeMillis();
+        ExecutorService executor = null;
         try {
+            List<FeatureVector> dataset = loadAndPrepareDataset();
+            if (dataset.size() < 2) {
+                LOGGER.warning("Dataset is too small to run the experiment.");
+                return;
+            }
+
+            List<MetricDefinition> metricDefinitions = createMetricDefinitions();
+            EnumSet<FeatureName> fullFeatureSet = EnumSet.allOf(FeatureName.class);
+
+            ResultsExportService exportService = new ResultsExportService();
+            NormalizationService normalizationService = new NormalizationService();
+            KnnClassifier classifier = new KnnClassifier();
+            QualityMeasureService qualityService = new QualityMeasureService();
+
+            Path outputDirectory = prepareOutputDirectory();
+            int threadPoolSize = Math.max(1, Runtime.getRuntime().availableProcessors());
+            LOGGER.info("Using fixed thread pool size = " + threadPoolSize);
+
+            if (REQUESTED_K_START < FIRST_VALID_K) {
+                LOGGER.info(String.format(
+                        Locale.US,
+                        "Requested start from k=%d, but k-NN requires k >= 1, so stage 1 starts from k=%d.",
+                        REQUESTED_K_START,
+                        FIRST_VALID_K
+                ));
+            }
+
+            executor = Executors.newFixedThreadPool(threadPoolSize);
             Map<Double, DatasetSplit> preparedSplits = precomputeNormalizedSplits(dataset, normalizationService);
 
             List<String> stageOneRows = new ArrayList<>();
@@ -109,7 +110,7 @@ public class Main {
             int stageOneKUpperBound = Math.min(fixedSplit.trainingSet().size(), MAX_K_TO_TEST);
             LOGGER.info(String.format(
                     Locale.US,
-                    "Stage 1 setup: train=%d, test=%d, kUpperBound=%d (capped by MAX_K_TO_TEST=%d, not by smallest class size).",
+                    "Stage 1 setup: train=%d, test=%d, kUpperBound=%d (capped by MAX_K_TO_TEST=%d).",
                     fixedSplit.trainingSet().size(),
                     fixedSplit.testSet().size(),
                     stageOneKUpperBound,
@@ -208,7 +209,10 @@ public class Main {
             printDetailedSummary(bestFinalOutcome);
             LOGGER.info("CSV files saved to: " + outputDirectory.toAbsolutePath());
         } finally {
-            shutdownExecutor(executor);
+            if (executor != null) {
+                shutdownExecutor(executor);
+            }
+            logTotalExperimentTime(totalStartMs);
         }
     }
 
@@ -266,102 +270,65 @@ public class Main {
             return new StageSearchResult(null, "No valid k for stage 1.");
         }
 
-        ExperimentOutcome bestOverallOutcome = null;
-        double previousBestScoreForK = Double.NaN;
-        int consecutiveDrops = 0;
-        int testedKValues = 0;
-        int testedCombinations = 0;
-        String stopReason = "MAX_K_REACHED";
-
+        List<ExperimentTask> tasks = new ArrayList<>();
         for (int k = FIRST_VALID_K; k <= maxPossibleK; k++) {
-            final int currentK = k;
-            LOGGER.info(String.format(
-                    Locale.US,
-                    "Stage 1 progress: starting k=%d/%d with %d metrics. Predictions inside each metric use the fixed thread pool.",
-                    currentK,
-                    maxPossibleK,
-                    metricDefinitions.size()
-            ));
-            ExperimentOutcome bestForCurrentK = null;
-
             for (MetricDefinition metricDefinition : metricDefinitions) {
-                long metricStartMs = System.currentTimeMillis();
-                ExperimentOutcome outcome = runSingleExperiment(
-                        split,
-                        trainRatio,
-                        metricDefinition,
-                        currentK,
-                        activeFeatures,
-                        true,
-                        executor,
-                        classifier,
-                        qualityService
-                );
-
-                appendCsvRows(csvRows, "STAGE_1_K_METRIC", outcome);
-                testedCombinations++;
-                logOutcomeSummary(
-                        String.format(Locale.US, "Stage 1 metric finished [k=%d metric=%s]", currentK, metricDefinition.name()),
-                        outcome,
-                        System.currentTimeMillis() - metricStartMs
-                );
-
-                if (isBetter(outcome, bestForCurrentK)) {
-                    bestForCurrentK = outcome;
-                }
-
-                if (isBetter(outcome, bestOverallOutcome)) {
-                    bestOverallOutcome = outcome;
-                    LOGGER.info("Stage 1 new global best: " + describeOutcome(bestOverallOutcome));
-                }
-            }
-
-            testedKValues++;
-
-            if (bestForCurrentK != null) {
-                double currentScore = bestForCurrentK.metrics().selectionScore();
-
-                if (!Double.isNaN(previousBestScoreForK) && currentScore < previousBestScoreForK) {
-                    consecutiveDrops++;
-                } else {
-                    consecutiveDrops = 0;
-                }
-
-                previousBestScoreForK = currentScore;
-
-                if (consecutiveDrops >= CONSECUTIVE_DROPS_TO_STOP) {
-                    stopReason = "EARLY_STOP_AFTER_5_DROPS";
-                    LOGGER.info(String.format(
-                            Locale.US,
-                            "Stage 1 early stop triggered at k=%d after %d consecutive score drops.",
-                            currentK,
-                            consecutiveDrops
-                    ));
-                    break;
-                }
-
-                LOGGER.info(String.format(
-                        Locale.US,
-                        "Stage 1 k=%d best metric=%s, score=%.6f, accuracy=%.6f, macroF1=%.6f, consecutiveDrops=%d.",
-                        currentK,
-                        bestForCurrentK.metricDefinition().name(),
-                        bestForCurrentK.metrics().selectionScore(),
-                        bestForCurrentK.metrics().accuracy(),
-                        bestForCurrentK.metrics().macroF1(),
-                        consecutiveDrops
+                final int currentK = k;
+                tasks.add(new ExperimentTask(
+                        String.format(Locale.US, "k=%03d metric=%s", currentK, metricDefinition.name()),
+                        () -> runSingleExperiment(
+                                split,
+                                trainRatio,
+                                metricDefinition,
+                                currentK,
+                                activeFeatures,
+                                classifier,
+                                qualityService
+                        )
                 ));
             }
         }
 
+        LOGGER.info(String.format(
+                Locale.US,
+                "Stage 1 progress: submitting %d tasks (k=%d..%d x %d metrics) in parallel.",
+                tasks.size(),
+                FIRST_VALID_K,
+                maxPossibleK,
+                metricDefinitions.size()
+        ));
+
+        final ExperimentOutcome[] bestOutcomeHolder = new ExperimentOutcome[1];
+
+        consumeExperimentTasks(
+                executor,
+                tasks,
+                "Stage 1",
+                30,
+                completedTask -> {
+                    ExperimentOutcome outcome = completedTask.outcome();
+                    appendCsvRows(csvRows, "STAGE_1_K_METRIC", outcome);
+                    logOutcomeSummary(
+                            "Stage 1 task finished [" + completedTask.label() + "]",
+                            outcome,
+                            completedTask.wallTimeMs()
+                    );
+
+                    if (isBetter(outcome, bestOutcomeHolder[0])) {
+                        bestOutcomeHolder[0] = outcome;
+                        LOGGER.info("Stage 1 new global best: " + describeOutcome(bestOutcomeHolder[0]));
+                    }
+                }
+        );
+
         return new StageSearchResult(
-                bestOverallOutcome,
+                bestOutcomeHolder[0],
                 String.format(
                         Locale.US,
-                        "Stage 1 summary: testedK=%d, testedCombinations=%d, maxPossibleK=%d, score=harmonicMean(accuracy,macroF1), stopReason=%s",
-                        testedKValues,
-                        testedCombinations,
-                        maxPossibleK,
-                        stopReason
+                        "Stage 1 summary: testedK=%d, testedCombinations=%d, maxPossibleK=%d, score=harmonicMean(accuracy,macroF1), stopReason=FULL_SCAN_COMPLETED",
+                        maxPossibleK - FIRST_VALID_K + 1,
+                        tasks.size(),
+                        maxPossibleK
                 )
         );
     }
@@ -398,8 +365,6 @@ public class Main {
                             metricDefinition,
                             k,
                             activeFeatures,
-                            false,
-                            executor,
                             classifier,
                             qualityService
                     )
@@ -462,8 +427,6 @@ public class Main {
                                 metricDefinition,
                                 k,
                                 activeFeatures,
-                                false,
-                                executor,
                                 classifier,
                                 qualityService
                         )
@@ -544,10 +507,8 @@ public class Main {
                                                          MetricDefinition metricDefinition,
                                                          int k,
                                                          EnumSet<FeatureName> activeFeatures,
-                                                         boolean parallelizePredictions,
-                                                         ExecutorService executor,
                                                          KnnClassifier classifier,
-                                                          QualityMeasureService qualityService) {
+                                                         QualityMeasureService qualityService) {
         List<FeatureVector> trainingSet = isFullFeatureSet(activeFeatures)
                 ? split.trainingSet()
                 : maskDataset(split.trainingSet(), activeFeatures);
@@ -556,11 +517,8 @@ public class Main {
                 : maskDataset(split.testSet(), activeFeatures);
 
         long startTime = System.currentTimeMillis();
-
-        List<QualityMeasureService.ClassificationResult> results = parallelizePredictions
-                ? classifyTestSetInParallel(executor, testSet, trainingSet, k, metricDefinition.metric(), classifier)
-                : classifyTestSetSequentially(testSet, trainingSet, k, metricDefinition.metric(), classifier);
-
+        List<QualityMeasureService.ClassificationResult> results =
+                classifyTestSetSequentially(testSet, trainingSet, k, metricDefinition.metric(), classifier);
         long durationMs = System.currentTimeMillis() - startTime;
 
         return new ExperimentOutcome(
@@ -615,43 +573,6 @@ public class Main {
         return activeFeatures.size() == FeatureName.values().length;
     }
 
-    private static List<QualityMeasureService.ClassificationResult> classifyTestSetInParallel(
-            ExecutorService executor,
-            List<FeatureVector> testSet,
-            List<FeatureVector> trainingSet,
-            int k,
-            Metric metric,
-            KnnClassifier classifier) {
-        if (testSet.isEmpty()) {
-            return List.of();
-        }
-
-        int chunkCount = Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), testSet.size()));
-        int chunkSize = Math.max(1, (testSet.size() + chunkCount - 1) / chunkCount);
-        List<Callable<List<QualityMeasureService.ClassificationResult>>> tasks = new ArrayList<>();
-
-        for (int startIndex = 0; startIndex < testSet.size(); startIndex += chunkSize) {
-            int fromIndex = startIndex;
-            int toIndex = Math.min(startIndex + chunkSize, testSet.size());
-            tasks.add(() -> {
-                List<QualityMeasureService.ClassificationResult> partialResults = new ArrayList<>(toIndex - fromIndex);
-                for (int index = fromIndex; index < toIndex; index++) {
-                    FeatureVector testVector = testSet.get(index);
-                    String predictedLabel = classifier.classify(testVector, trainingSet, k, metric);
-                    partialResults.add(new QualityMeasureService.ClassificationResult(testVector.label(), predictedLabel));
-                }
-                return partialResults;
-            });
-        }
-
-        List<List<QualityMeasureService.ClassificationResult>> chunkResults = invokeTasks(executor, tasks);
-        List<QualityMeasureService.ClassificationResult> results = new ArrayList<>(testSet.size());
-        for (List<QualityMeasureService.ClassificationResult> chunkResult : chunkResults) {
-            results.addAll(chunkResult);
-        }
-        return results;
-    }
-
     private static List<QualityMeasureService.ClassificationResult> classifyTestSetSequentially(
             List<FeatureVector> testSet,
             List<FeatureVector> trainingSet,
@@ -664,26 +585,6 @@ public class Main {
             results.add(new QualityMeasureService.ClassificationResult(testVector.label(), predictedLabel));
         }
         return results;
-    }
-
-    private static <T> List<T> invokeTasks(ExecutorService executor, List<Callable<T>> tasks) {
-        if (tasks.isEmpty()) {
-            return List.of();
-        }
-
-        try {
-            List<Future<T>> futures = executor.invokeAll(tasks);
-            List<T> results = new ArrayList<>(futures.size());
-            for (Future<T> future : futures) {
-                results.add(future.get());
-            }
-            return results;
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Experiment execution interrupted.", exception);
-        } catch (ExecutionException exception) {
-            throw new IllegalStateException("Experiment execution failed.", exception.getCause());
-        }
     }
 
     private static void consumeExperimentTasks(ExecutorService executor,
@@ -988,9 +889,35 @@ public class Main {
                     classMetrics.className(),
                     classMetrics.precision(),
                     classMetrics.recall(),
-                    classMetrics.f1()
+                classMetrics.f1()
             ));
         }
+    }
+
+    private static void logTotalExperimentTime(long totalStartMs) {
+        long totalDurationMs = System.currentTimeMillis() - totalStartMs;
+        LOGGER.info(String.format(
+                Locale.US,
+                "Total experiment time = %d ms (%s)",
+                totalDurationMs,
+                formatDuration(totalDurationMs)
+        ));
+    }
+
+    private static String formatDuration(long durationMs) {
+        long hours = durationMs / 3_600_000;
+        long minutes = (durationMs % 3_600_000) / 60_000;
+        long seconds = (durationMs % 60_000) / 1_000;
+        long milliseconds = durationMs % 1_000;
+
+        return String.format(
+                Locale.US,
+                "%02d:%02d:%02d.%03d",
+                hours,
+                minutes,
+                seconds,
+                milliseconds
+        );
     }
 
     private static Path prepareOutputDirectory() {

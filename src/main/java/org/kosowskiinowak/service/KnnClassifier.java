@@ -8,14 +8,22 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.stream.Collectors;
 
 public class KnnClassifier {
 
     /**
-     * Zwraca maksymalne dopuszczalne k dla danego zbioru treningowego.
-     * k nie może przekraczać 2 * liczebność_najmniejszej_klasy + 1,
-     * bo wtedy najmniejsza klasa nie może nigdy wygrać głosowania.
+     * Returns a heuristic upper bound for k based on the smallest class size.
+     *
+     * In k-NN voting, if k exceeds 2 * minClassSize, the minority class can never
+     * accumulate enough votes to win against a larger class — it is effectively
+     * eliminated from classification. The bound 2 * minClassSize + 1 guarantees
+     * that even the smallest class can achieve a majority when all k nearest
+     * neighbours belong to it.
+     *
+     * <p>Note: not called in the experiment pipeline — kept as a utility for
+     * manual configuration guidance when choosing the k search range.
      */
     public int maxAllowedK(List<FeatureVector> trainingSet) {
         Map<String, Long> classCounts = trainingSet.stream()
@@ -30,19 +38,36 @@ public class KnnClassifier {
 
     public String classify(FeatureVector testVector, List<FeatureVector> trainingSet, int k, Metric metric) {
         if (k < 1) {
-            throw new IllegalArgumentException("k musi być >= 1, podano: " + k);
+            throw new IllegalArgumentException("k must be >= 1, got: " + k);
         }
 
-        List<Neighbor> neighbors = new ArrayList<>();
+        if (trainingSet == null || trainingSet.isEmpty()) {
+            throw new IllegalArgumentException("Training set must not be empty.");
+        }
+
+        int effectiveK = Math.min(k, trainingSet.size());
+        PriorityQueue<Neighbor> nearestNeighbors = new PriorityQueue<>(
+                effectiveK,
+                Comparator.comparingDouble(Neighbor::distance).reversed()
+        );
 
         for (FeatureVector trainVector : trainingSet) {
             double distance = metric.calculate(testVector, trainVector);
-            neighbors.add(new Neighbor(distance, trainVector.label()));
+            Neighbor neighbor = new Neighbor(distance, trainVector.label());
+
+            if (nearestNeighbors.size() < effectiveK) {
+                nearestNeighbors.offer(neighbor);
+                continue;
+            }
+
+            Neighbor farthestNeighbor = nearestNeighbors.peek();
+            if (farthestNeighbor != null && distance < farthestNeighbor.distance()) {
+                nearestNeighbors.poll();
+                nearestNeighbors.offer(neighbor);
+            }
         }
 
-        neighbors.sort(Comparator.comparingDouble(Neighbor::distance));
-
-        List<Neighbor> kNearest = neighbors.subList(0, Math.min(k, neighbors.size()));
+        List<Neighbor> kNearest = new ArrayList<>(nearestNeighbors);
 
         Map<String, Long> votes = kNearest.stream()
                 .collect(Collectors.groupingBy(Neighbor::label, Collectors.counting()));
@@ -60,10 +85,13 @@ public class KnnClassifier {
             return winners.get(0);
         }
 
+        // Sort only when tie-breaking is actually needed (rare case)
+        kNearest.sort(Comparator.comparingDouble(Neighbor::distance));
+
         return winners.stream()
                 .min(Comparator.comparingDouble(label ->
                         kNearest.stream()
-                                .filter(n -> n.label().equals(label))
+                                .filter(neighbor -> neighbor.label().equals(label))
                                 .mapToDouble(Neighbor::distance)
                                 .average()
                                 .orElse(Double.MAX_VALUE)

@@ -11,6 +11,7 @@ import rita.RiTa;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -18,49 +19,72 @@ public class FeatureVectorExtractor {
 
     private static final String FINANCIAL_SYMBOLS = "$%¥£&/#*";
     private static final String VOWELS = "aeiouyAEIOUY";
-    // \\d+ matches one or more digits
     private static final Pattern NUMBER_PATTERN = Pattern.compile("\\d+([.,]\\d+)?");
 
+    // One EnglishAnalyzer per thread - avoids recreating a heavyweight object per article.
+    // EnglishAnalyzer loads stopword lists on construction; reusing it is a significant speedup
+    // when feature extraction runs via parallelStream.
+    private static final ThreadLocal<Analyzer> THREAD_LOCAL_ANALYZER =
+            ThreadLocal.withInitial(EnglishAnalyzer::new);
+
+    // RiTa.syllables() is deterministic and slow - cache results globally across all articles.
+    private static final ConcurrentHashMap<String, Integer> SYLLABLE_CACHE =
+            new ConcurrentHashMap<>(4096);
+
     public FeatureVector extractAllFeaturesFromArticle(SingleArticle article) throws IOException {
+        String text = article.text();
+        Map<String, Integer> wordsCountMap = countWords(text);
 
-        Map<String, Integer> wordsCountMap = countWords(article.text());
+        // Single pass over characters replaces three separate stream/loop passes
+        // (getUppercaseLetterRatio, getFinancialSignDensity, getVowelToConsonantRatio).
+        long[] charStats = computeCharStats(text);
+        long uppercaseCount  = charStats[0];
+        long totalLetters    = charStats[1];
+        long vowelCount      = charStats[2];
+        long consonantCount  = charStats[3];
+        long financialCount  = charStats[4];
 
-        String label = article.countryLabel();
+        double uppercaseLetterRatio = totalLetters > 0 ? (double) uppercaseCount / totalLetters : 0.0;
+        double financialSignDensity = !text.isEmpty() ? (double) financialCount / text.length() : 0.0;
+        double vowelToConsonantRatio = consonantCount > 0 ? (double) vowelCount / consonantCount : vowelCount;
 
-        String longestWord = getLongestWord(wordsCountMap);
-        String mostFrequentWord = getMostFrequentWord(wordsCountMap);
-
-        double averageWordLength = getAverageWordLength(wordsCountMap);
-        double vocabularyRichness = getVocabularyRichness(wordsCountMap);
-        double averageSentenceLength = getAverageSentenceLength(article.text());
-        double uppercaseLetterRatio = getUppercaseLetterRatio(article.text());
-        double financialSignDensity = getFinancialSignDensity(article.text());
-        double fleschReadingEaseIndex = getFleschReadingEaseIndex(article.text());
-        double vowelToConsonantRatio = getVowelToConsonantRatio(article.text());
-        double sumOfAllNumericValues = getSumOfAllNumericValues(article.text());
-
-        FeatureVector vector = new FeatureVector(
-                label,
-                longestWord,
-                mostFrequentWord,
-                averageWordLength,
-                vocabularyRichness,
-                averageSentenceLength,
+        return new FeatureVector(
+                article.countryLabel(),
+                getLongestWord(wordsCountMap),
+                getMostFrequentWord(wordsCountMap),
+                getAverageWordLength(wordsCountMap),
+                getVocabularyRichness(wordsCountMap),
+                getAverageSentenceLength(text),
                 uppercaseLetterRatio,
                 financialSignDensity,
-                fleschReadingEaseIndex,
+                getFleschReadingEaseIndex(text),
                 vowelToConsonantRatio,
-                sumOfAllNumericValues
+                getSumOfAllNumericValues(text)
         );
+    }
 
-        return vector;
+    // [0]=uppercase, [1]=totalLetters, [2]=vowels, [3]=consonants, [4]=financialSigns
+    private static long[] computeCharStats(String text) {
+        long[] s = new long[5];
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (Character.isLetter(ch)) {
+                s[1]++;
+                if (Character.isUpperCase(ch)) s[0]++;
+                if (VOWELS.indexOf(ch) >= 0) s[2]++;
+                else s[3]++;
+            } else if (FINANCIAL_SYMBOLS.indexOf(ch) >= 0) {
+                s[4]++;
+            }
+        }
+        return s;
     }
 
     /**
-     * Finds the most frequent word in the article text using Apache Lucene's EnglishAnalyzer.
+     * Finds the most frequent word in the given word frequency map.
      *
-     * @param frequencies a map of words and their corresponding frequencies in the article text
-     * @return the most frequent word in the article text
+     * @param frequencies a map of stemmed words to their occurrence counts
+     * @return the most frequent word, or {@code null} if the map is empty
      */
     String getMostFrequentWord(Map<String, Integer> frequencies) {
 
@@ -78,10 +102,10 @@ public class FeatureVectorExtractor {
     }
 
     /**
-     * Finds the longest word in the article text using Apache Lucene's EnglishAnalyzer.
+     * Finds the longest word in the given word frequency map.
      *
-     * @param frequencies a map of words and their corresponding frequencies in the article text
-     * @return the longest word in the article text
+     * @param frequencies a map of stemmed words to their occurrence counts
+     * @return the longest word, or {@code null} if the map is empty
      */
     String getLongestWord(Map<String, Integer> frequencies) {
         String longestWord = null;
@@ -96,10 +120,10 @@ public class FeatureVectorExtractor {
     }
 
     /**
-     * Calculates the average word length in the article text using Apache Lucene's EnglishAnalyzer.
+     * Calculates the weighted average word length across all occurrences.
      *
-     * @param frequencies a map of words and their corresponding frequencies in the article text
-     * @return the average word length in the article text
+     * @param frequencies a map of stemmed words to their occurrence counts
+     * @return the average word length, or {@code 0.0} if the map is empty
      */
     double getAverageWordLength(Map<String, Integer> frequencies) {
         int totalWords = frequencies.values().stream().mapToInt(Integer::intValue).sum();
@@ -115,10 +139,10 @@ public class FeatureVectorExtractor {
     }
 
     /**
-     * Calculates the vocabulary richness of the article text using Apache Lucene's EnglishAnalyzer.
+     * Calculates vocabulary richness as the ratio of unique words to total words (type-token ratio).
      *
-     * @param frequencies a map of words and their corresponding frequencies in the article text
-     * @return the vocabulary richness of the article text
+     * @param frequencies a map of stemmed words to their occurrence counts
+     * @return a value in [0, 1] where higher means more diverse vocabulary; {@code 0.0} if empty
      */
     double getVocabularyRichness(Map<String, Integer> frequencies) {
         int totalWords = frequencies.values().stream().mapToInt(Integer::intValue).sum();
@@ -150,42 +174,6 @@ public class FeatureVectorExtractor {
     }
 
     /**
-     * Calculates the ratio of uppercase letters to total letters in the article text.
-     *
-     * @param text the article text
-     * @return the ratio of uppercase letters to total letters in the article text
-     */
-    double getUppercaseLetterRatio(String text) {
-        long uppercaseCount = text.chars().filter(Character::isUpperCase).count();
-        long totalLetters = text.chars().filter(Character::isLetter).count();
-
-        if (totalLetters == 0) {
-            return 0.0;
-        }
-
-        return (double) uppercaseCount / totalLetters;
-    }
-
-    /**
-     * Calculates the density of financial signs in the article text.
-     *
-     * @param text the article text
-     * @return the density of financial signs in the article text
-     */
-    double getFinancialSignDensity(String text) {
-        if (text == null || text.isEmpty()) {
-            return 0.0;
-        }
-
-        long financialSignCount = text.chars()
-                .filter(ch -> FINANCIAL_SYMBOLS.indexOf(ch) != -1)
-                .count();
-
-        return (double) financialSignCount / text.length();
-    }
-
-
-    /**
      * Calculates the Flesch Reading Ease Index for the article text.
      *
      * @param text the article text
@@ -199,71 +187,31 @@ public class FeatureVectorExtractor {
         String[] sentences = text.split("[.!?]+");
         int totalSentences = Math.max(1, sentences.length);
 
-        // Filter for alphanumeric words only, ignoring numbers and symbols
+        // After replaceAll("[^a-z ]"," "), every non-empty token is already [a-z]+,
+        // so no further regex check is needed inside the loop.
         String[] words = text.toLowerCase().replaceAll("[^a-z ]", " ").split("\\s+");
         int totalWords = 0;
         int totalSyllables = 0;
 
         for (String word : words) {
-            if (word.isBlank() || word.length() < 1) continue;
-
-            // RiTa might crash on very short or non-dictionary words
-            // If it's not a word with at least one letter, skip it or count as 1 syllable
-            if (!word.matches("[a-z]+")) continue;
-
+            if (word.isEmpty()) continue;
             totalWords++;
-
-            try {
-                String syllables = RiTa.syllables(word);
-                if (syllables != null && !syllables.isBlank()) {
-                    totalSyllables += syllables.split("/").length;
-                } else {
-                    totalSyllables += 1;
+            // Cache RiTa results - same word always yields the same syllable count,
+            // and Reuters articles share vocabulary heavily across documents.
+            totalSyllables += SYLLABLE_CACHE.computeIfAbsent(word, w -> {
+                try {
+                    String syllables = RiTa.syllables(w);
+                    return (syllables != null && !syllables.isBlank()) ? syllables.split("/").length : 1;
+                } catch (Exception e) {
+                    return 1;
                 }
-            } catch (Exception e) {
-                // If RiTa fails, assume 1 syllable and continue to avoid crashing the whole process
-                totalSyllables += 1;
-            }
+            });
         }
 
         if (totalWords == 0) return 0.0;
 
         return 206.835 - 1.015 * ((double) totalWords / totalSentences) - 84.6 * ((double) totalSyllables / totalWords);
     }
-
-    /**
-     * Calculates the ratio of vowels to consonants in the article text.
-     *
-     * @param text the article text
-     * @return the ratio of vowels to consonants in the article text
-     */
-    double getVowelToConsonantRatio(String text) {
-        if (text == null || text.isEmpty()) {
-            return 0.0;
-        }
-
-        int vowels = 0;
-        int consonants = 0;
-
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-
-            if (Character.isLetter(ch)) {
-                if (VOWELS.indexOf(ch) != -1) {
-                    vowels++;
-                } else {
-                    consonants++;
-                }
-            }
-        }
-
-        if (consonants == 0) {
-            return vowels;
-        }
-
-        return (double) vowels / consonants;
-    }
-
 
     /**
      * Calculates the sum of all numeric values in the article text.
@@ -286,6 +234,7 @@ public class FeatureVectorExtractor {
                 sum += Double.parseDouble(cleanMatch);
 
             } catch (NumberFormatException e) {
+                // NUMBER_PATTERN already validates the format; this is a defensive fallback only
             }
         }
 
@@ -294,22 +243,16 @@ public class FeatureVectorExtractor {
 
     private Map<String, Integer> countWords(String text) throws IOException {
         Map<String, Integer> frequencies = new HashMap<>();
-
-        try (Analyzer analyzer = new EnglishAnalyzer();
-             TokenStream tokenStream = analyzer.tokenStream("field", text)) {
-
-            CharTermAttribute termAttr = tokenStream.addAttribute(CharTermAttribute.class);
-
-            tokenStream.reset();
-
-            while (tokenStream.incrementToken()) {
-                String word = termAttr.toString();
-                frequencies.put(word, frequencies.getOrDefault(word, 0) + 1);
-            }
-
-            tokenStream.end();
+        Analyzer analyzer = THREAD_LOCAL_ANALYZER.get();
+        TokenStream tokenStream = analyzer.tokenStream("field", text);
+        CharTermAttribute termAttr = tokenStream.addAttribute(CharTermAttribute.class);
+        tokenStream.reset();
+        while (tokenStream.incrementToken()) {
+            String word = termAttr.toString();
+            frequencies.merge(word, 1, Integer::sum);
         }
-
+        tokenStream.end();
+        tokenStream.close();
         return frequencies;
     }
 

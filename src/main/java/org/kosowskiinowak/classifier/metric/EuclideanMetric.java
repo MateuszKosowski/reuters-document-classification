@@ -22,20 +22,28 @@ public class EuclideanMetric implements Metric {
             return 0.0;
         }
 
-        double longestWord = textSimilarityService.calculateTextDistance(a.longestWord(), b.longestWord(), 2);
-        double mostFrequentWord = textSimilarityService.calculateTextDistance(a.mostFrequentWord(), b.mostFrequentWord(), 2);
+        double dLongestWord = textSimilarityService.calculateTextDistance(a.longestWord(), b.longestWord(), 2);
+        double dMostFreqWord = textSimilarityService.calculateTextDistance(a.mostFrequentWord(), b.mostFrequentWord(), 2);
+        double dAvgLen = a.averageWordLength() - b.averageWordLength();
+        double dVocab = a.vocabularyRichness() - b.vocabularyRichness();
+        double dSentLen = a.averageSentenceLength() - b.averageSentenceLength();
+        double dUppercase = a.uppercaseLetterRatio() - b.uppercaseLetterRatio();
+        double dFinancial = a.financialSignDensity() - b.financialSignDensity();
+        double dFlesch = a.fleschReadingEaseIndex() - b.fleschReadingEaseIndex();
+        double dVowel = a.vowelToConsonantRatio() - b.vowelToConsonantRatio();
+        double dNumeric = a.sumOfAllNumericValues() - b.sumOfAllNumericValues();
 
         return Math.sqrt(
-                Math.pow(longestWord, 2) +
-                        Math.pow(mostFrequentWord, 2) +
-                        Math.pow(a.averageWordLength() - b.averageWordLength(), 2) +
-                        Math.pow(a.vocabularyRichness() - b.vocabularyRichness(), 2) +
-                        Math.pow(a.averageSentenceLength() - b.averageSentenceLength(), 2) +
-                        Math.pow(a.uppercaseLetterRatio() - b.uppercaseLetterRatio(), 2) +
-                        Math.pow(a.financialSignDensity() - b.financialSignDensity(), 2) +
-                        Math.pow(a.fleschReadingEaseIndex() - b.fleschReadingEaseIndex(), 2) +
-                        Math.pow(a.vowelToConsonantRatio() - b.vowelToConsonantRatio(), 2) +
-                        Math.pow(a.sumOfAllNumericValues() - b.sumOfAllNumericValues(), 2)
+                dLongestWord * dLongestWord +
+                dMostFreqWord * dMostFreqWord +
+                dAvgLen * dAvgLen +
+                dVocab * dVocab +
+                dSentLen * dSentLen +
+                dUppercase * dUppercase +
+                dFinancial * dFinancial +
+                dFlesch * dFlesch +
+                dVowel * dVowel +
+                dNumeric * dNumeric
         );
     }
 }

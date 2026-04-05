@@ -1,10 +1,16 @@
 package org.kosowskiinowak.service;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class TextSimilarityService {
+
+    // N-gram sets are recomputed from scratch for every test×training pair, which
+    // causes millions of HashSet allocations per experiment. Cache by (text, n) so
+    // each unique word is processed only once across all classifier calls.
+    private final ConcurrentHashMap<String, Set<String>> nGramCache = new ConcurrentHashMap<>();
 
     public double calculateTextDistance(String s1, String s2, int n) {
         return 1.0 - calculateNGramSimilarity(s1, s2, n);
@@ -18,23 +24,25 @@ public class TextSimilarityService {
         Set<String> nGrams1 = generateNGrams(s1, n);
         Set<String> nGrams2 = generateNGrams(s2, n);
 
-        int initialSize1 = nGrams1.size();
-        int initialSize2 = nGrams2.size();
+        int common = 0;
+        for (String ngram : nGrams1) {
+            if (nGrams2.contains(ngram)) {
+                common++;
+            }
+        }
 
-        Set<String> intersection = nGrams1.stream()
-                .filter(nGrams2::contains)
-                .collect(Collectors.toSet());
-        int common = intersection.size();
-
-        // Sorensena-Dice'a
-        return (2.0 * common) / (initialSize1 + initialSize2);
+        // Sørensen–Dice coefficient
+        return (2.0 * common) / (nGrams1.size() + nGrams2.size());
     }
 
     private Set<String> generateNGrams(String text, int n) {
-        Set<String> nGrams = new HashSet<>();
-        for (int i = 0; i <= text.length() - n; i++) {
-            nGrams.add(text.substring(i, i + n));
-        }
-        return nGrams;
+        String cacheKey = n + "\u0000" + text;
+        return nGramCache.computeIfAbsent(cacheKey, key -> {
+            Set<String> nGrams = new HashSet<>();
+            for (int i = 0; i <= text.length() - n; i++) {
+                nGrams.add(text.substring(i, i + n));
+            }
+            return Collections.unmodifiableSet(nGrams);
+        });
     }
 }

@@ -3,8 +3,6 @@ package org.kosowskiinowak.classifier.metric;
 import org.kosowskiinowak.model.FeatureVector;
 import org.kosowskiinowak.service.TextSimilarityService;
 
-import java.util.stream.Stream;
-
 public class ChebyshevMetric implements Metric {
 
     private final TextSimilarityService textSimilarityService;
@@ -24,20 +22,26 @@ public class ChebyshevMetric implements Metric {
             return 0.0;
         }
 
-        double longestWordDist = textSimilarityService.calculateTextDistance(a.longestWord(), b.longestWord(), 2);
-        double mostFrequentWordDist = textSimilarityService.calculateTextDistance(a.mostFrequentWord(), b.mostFrequentWord(), 2);
-
-        return Stream.of(
-                longestWordDist,
-                mostFrequentWordDist,
-                Math.abs(a.averageWordLength() - b.averageWordLength()),
-                Math.abs(a.vocabularyRichness() - b.vocabularyRichness()),
-                Math.abs(a.averageSentenceLength() - b.averageSentenceLength()),
-                Math.abs(a.uppercaseLetterRatio() - b.uppercaseLetterRatio()),
-                Math.abs(a.financialSignDensity() - b.financialSignDensity()),
-                Math.abs(a.fleschReadingEaseIndex() - b.fleschReadingEaseIndex()),
-                Math.abs(a.vowelToConsonantRatio() - b.vowelToConsonantRatio()),
-                Math.abs(a.sumOfAllNumericValues() - b.sumOfAllNumericValues())
-        ).max(Double::compareTo).orElse(0.0);
+        double max = textSimilarityService.calculateTextDistance(a.longestWord(), b.longestWord(), 2);
+        double d;
+        d = textSimilarityService.calculateTextDistance(a.mostFrequentWord(), b.mostFrequentWord(), 2);
+        if (d > max) max = d;
+        d = Math.abs(a.averageWordLength() - b.averageWordLength());
+        if (d > max) max = d;
+        d = Math.abs(a.vocabularyRichness() - b.vocabularyRichness());
+        if (d > max) max = d;
+        d = Math.abs(a.averageSentenceLength() - b.averageSentenceLength());
+        if (d > max) max = d;
+        d = Math.abs(a.uppercaseLetterRatio() - b.uppercaseLetterRatio());
+        if (d > max) max = d;
+        d = Math.abs(a.financialSignDensity() - b.financialSignDensity());
+        if (d > max) max = d;
+        d = Math.abs(a.fleschReadingEaseIndex() - b.fleschReadingEaseIndex());
+        if (d > max) max = d;
+        d = Math.abs(a.vowelToConsonantRatio() - b.vowelToConsonantRatio());
+        if (d > max) max = d;
+        d = Math.abs(a.sumOfAllNumericValues() - b.sumOfAllNumericValues());
+        if (d > max) max = d;
+        return max;
     }
 }

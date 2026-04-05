@@ -17,18 +17,7 @@ import java.util.stream.Stream;
 public class ArticleLoader {
 
     // Example tag: <REUTERS TOPICS="YES" LEWISSPLIT="TRAIN" CGISPLIT="TRAINING-SET" OLDID="5544" NEWID="1">
-    // In regex: . means "any character", * means "zero or more times", ? means "lazy search" - stop at first pattern which matches the righthand side
-    // () - means capture group - special place to store data, where we can access by matcher.group(index)
-    // Pattern.DOTALL - . by default doesn't match newlines, but with DOTALL it matches everything, including newlines
     private static final Pattern REUTERS_PATTERN = Pattern.compile("<REUTERS.*?>(.*?)</REUTERS>", Pattern.DOTALL);
-    // The regex engine works step by step and here are 5 of them
-    // 1. Find <REUTERS, "eat" it
-    // 2. Then explore the rest char by char, each time check if it is not a pattern from step 3 eat it. If it is, go to step 3.
-    // 3. Eat >
-    // 4. Then explore the rest char by char, each time check if it is not a pattern from step 5 save it and eat it. If it is, go to step 5.
-    // 5. Eat </REUTERS>
-    // Generally, the division into steps occurs when special regex characters are encountered
-    // If you want to treat those special characters as normal characters, you can use \\ to escape them
 
     private static final Pattern PLACES_PATTERN = Pattern.compile("<PLACES>(.*?)</PLACES>", Pattern.DOTALL);
     private static final Pattern D_TAG_PATTERN = Pattern.compile("<D>(.*?)</D>");
@@ -64,9 +53,7 @@ public class ArticleLoader {
         List<SingleArticle> articlesFromFile = new ArrayList<>();
         Matcher reutersMatcher = REUTERS_PATTERN.matcher(fileContent);
 
-        // Once a match is found, Matcher remembers the position
         while (reutersMatcher.find()) {
-            // group(0) - the whole match <REUTERS...>Article content...</REUTERS>
             String articleRawText = reutersMatcher.group(1);
 
             String countryLabel = extractValidCountry(articleRawText);
