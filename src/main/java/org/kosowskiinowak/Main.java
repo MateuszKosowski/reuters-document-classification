@@ -13,6 +13,15 @@ import org.kosowskiinowak.service.NormalizationService;
 import org.kosowskiinowak.service.QualityMeasureService;
 import org.kosowskiinowak.service.ResultsExportService;
 import org.kosowskiinowak.service.TextSimilarityService;
+import org.kosowskiinowak.model.ClassMetrics;
+import org.kosowskiinowak.model.CompletedExperiment;
+import org.kosowskiinowak.model.DatasetSplit;
+import org.kosowskiinowak.model.DetailedMetrics;
+import org.kosowskiinowak.model.ExperimentOutcome;
+import org.kosowskiinowak.model.ExperimentTask;
+import org.kosowskiinowak.model.FeatureName;
+import org.kosowskiinowak.model.MetricDefinition;
+import org.kosowskiinowak.model.StageSearchResult;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -940,62 +949,5 @@ public class Main {
             executor.shutdownNow();
             Thread.currentThread().interrupt();
         }
-    }
-
-    private enum FeatureName {
-        LONGEST_WORD("longestWord"),
-        MOST_FREQUENT_WORD("mostFrequentWord"),
-        AVERAGE_WORD_LENGTH("averageWordLength"),
-        VOCABULARY_RICHNESS("vocabularyRichness"),
-        AVERAGE_SENTENCE_LENGTH("averageSentenceLength"),
-        UPPERCASE_LETTER_RATIO("uppercaseLetterRatio"),
-        FINANCIAL_SIGN_DENSITY("financialSignDensity"),
-        FLESCH_READING_EASE_INDEX("fleschReadingEaseIndex"),
-        VOWEL_TO_CONSONANT_RATIO("vowelToConsonantRatio"),
-        SUM_OF_ALL_NUMERIC_VALUES("sumOfAllNumericValues");
-
-        private final String csvLabel;
-
-        FeatureName(String csvLabel) {
-            this.csvLabel = csvLabel;
-        }
-
-        public String csvLabel() {
-            return csvLabel;
-        }
-    }
-
-    private record MetricDefinition(String name, Metric metric) {
-    }
-
-    private record DatasetSplit(List<FeatureVector> trainingSet, List<FeatureVector> testSet) {
-    }
-
-    private record ClassMetrics(String className, double precision, double recall, double f1) {
-    }
-
-    private record DetailedMetrics(double accuracy,
-                                   double macroPrecision,
-                                   double macroRecall,
-                                   double macroF1,
-                                   double selectionScore,
-                                   List<ClassMetrics> perClassMetrics) {
-    }
-
-    private record ExperimentOutcome(double trainRatio,
-                                     MetricDefinition metricDefinition,
-                                     int k,
-                                     EnumSet<FeatureName> activeFeatures,
-                                     DetailedMetrics metrics,
-                                     long durationMs) {
-    }
-
-    private record StageSearchResult(ExperimentOutcome bestOutcome, String stageNote) {
-    }
-
-    private record ExperimentTask(String label, Callable<ExperimentOutcome> callable) {
-    }
-
-    private record CompletedExperiment(String label, ExperimentOutcome outcome, long wallTimeMs) {
     }
 }
