@@ -24,7 +24,6 @@ import org.kosowskiinowak.model.MetricDefinition;
 import org.kosowskiinowak.model.StageSearchResult;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -57,8 +56,6 @@ public class Main {
     private static final String DATA_SOURCE = "src/main/resources/reuters21578";
     private static final long SEED = 42L;
 
-    private static final int REQUESTED_K_START = 0;
-    private static final int FIRST_VALID_K = Math.max(1, REQUESTED_K_START);
     private static final int MAX_K_TO_TEST = 30;
 
     private static final double STAGE_ONE_TRAIN_RATIO = 0.50;
@@ -88,15 +85,6 @@ public class Main {
             int threadPoolSize = Math.max(1, Runtime.getRuntime().availableProcessors());
             LOGGER.info("Using fixed thread pool size = " + threadPoolSize);
 
-            if (REQUESTED_K_START < FIRST_VALID_K) {
-                LOGGER.info(String.format(
-                        Locale.US,
-                        "Requested start from k=%d, but k-NN requires k >= 1, so stage 1 starts from k=%d.",
-                        REQUESTED_K_START,
-                        FIRST_VALID_K
-                ));
-            }
-
             executor = Executors.newFixedThreadPool(threadPoolSize);
             Map<Double, DatasetSplit> preparedSplits = precomputeNormalizedSplits(dataset, normalizationService);
 
@@ -111,21 +99,17 @@ public class Main {
             ));
 
             DatasetSplit fixedSplit = preparedSplits.get(STAGE_ONE_TRAIN_RATIO);
-            int stageOneKUpperBound = Math.min(fixedSplit.trainingSet().size(), MAX_K_TO_TEST);
             LOGGER.info(String.format(
                     Locale.US,
-                    "Stage 1 setup: train=%d, test=%d, kUpperBound=%d (capped by MAX_K_TO_TEST=%d).",
+                    "Stage 1 setup: train=%d, test=%d, kUpperBound=%d",
                     fixedSplit.trainingSet().size(),
                     fixedSplit.testSet().size(),
-                    stageOneKUpperBound,
                     MAX_K_TO_TEST
             ));
             StageSearchResult stageOneResult = searchKAndMetric(
                     fixedSplit,
-                    STAGE_ONE_TRAIN_RATIO,
                     fullFeatureSet,
                     metricDefinitions,
-                    stageOneKUpperBound,
                     classifier,
                     qualityService,
                     executor,
@@ -137,7 +121,8 @@ public class Main {
                 return;
             }
 
-            LOGGER.info("Best after stage 1: " + describeOutcome(stageOneResult.bestOutcome()));
+            LOGGER.info(String.format(Locale.US, "Best after stage 1: k=%d, metric=%s",
+                    stageOneResult.bestOutcome().k(), stageOneResult.bestOutcome().metricDefinition().name()));
             LOGGER.info(stageOneResult.stageNote());
 
             List<String> stageTwoRows = new ArrayList<>();
@@ -168,7 +153,9 @@ public class Main {
                 return;
             }
 
-            LOGGER.info("Best after stage 2: " + describeOutcome(stageTwoResult.bestOutcome()));
+            LOGGER.info(String.format(Locale.US, "Best after stage 2: split=%.0f/%.0f",
+                    stageTwoResult.bestOutcome().trainRatio() * 100,
+                    (1.0 - stageTwoResult.bestOutcome().trainRatio()) * 100));
 
             List<String> stageThreeRows = new ArrayList<>();
             stageThreeRows.add(csvHeader());
@@ -208,8 +195,16 @@ public class Main {
             exportService.exportToCsv(stageThreeRows, outputDirectory.resolve(STAGE_THREE_FILE).toString());
             exportService.exportToCsv(bestFinalRows, outputDirectory.resolve(BEST_FINAL_FILE).toString());
 
-            LOGGER.info("Best subset found in stage 3: " + describeOutcome(stageThreeResult.bestOutcome()));
-            LOGGER.info("Best final configuration: " + describeOutcome(bestFinalOutcome));
+            LOGGER.info(String.format(Locale.US,
+                    "Experiment completed. Best configuration: k=%d, metric=%s, split=%.0f/%.0f, featuresCount=%d -> score=%.4f",
+                    bestFinalOutcome.k(),
+                    bestFinalOutcome.metricDefinition().name(),
+                    bestFinalOutcome.trainRatio() * 100,
+                    (1.0 - bestFinalOutcome.trainRatio()) * 100,
+                    bestFinalOutcome.activeFeatures().size(),
+                    bestFinalOutcome.metrics().selectionScore()
+            ));
+            LOGGER.info(String.format(Locale.US, "Best configuration details: %s", bestFinalOutcome));
             printDetailedSummary(bestFinalOutcome);
             LOGGER.info("CSV files saved to: " + outputDirectory.toAbsolutePath());
         } finally {
@@ -261,28 +256,21 @@ public class Main {
     }
 
     private static StageSearchResult searchKAndMetric(DatasetSplit split,
-                                                      double trainRatio,
                                                       EnumSet<FeatureName> activeFeatures,
                                                       List<MetricDefinition> metricDefinitions,
-                                                      int stageOneKUpperBound,
                                                       KnnClassifier classifier,
                                                       QualityMeasureService qualityService,
                                                       ExecutorService executor,
                                                       List<String> csvRows) {
-        int maxPossibleK = Math.min(stageOneKUpperBound, split.trainingSet().size());
-        if (maxPossibleK < FIRST_VALID_K) {
-            return new StageSearchResult(null, "No valid k for stage 1.");
-        }
-
         List<ExperimentTask> tasks = new ArrayList<>();
-        for (int k = FIRST_VALID_K; k <= maxPossibleK; k++) {
+        for (int k = 1; k <= MAX_K_TO_TEST; k++) {
             for (MetricDefinition metricDefinition : metricDefinitions) {
                 final int currentK = k;
                 tasks.add(new ExperimentTask(
                         String.format(Locale.US, "k=%03d metric=%s", currentK, metricDefinition.name()),
                         () -> runSingleExperiment(
                                 split,
-                                trainRatio,
+                                STAGE_ONE_TRAIN_RATIO,
                                 metricDefinition,
                                 currentK,
                                 activeFeatures,
@@ -295,10 +283,9 @@ public class Main {
 
         LOGGER.info(String.format(
                 Locale.US,
-                "Stage 1 progress: submitting %d tasks (k=%d..%d x %d metrics) in parallel.",
+                "Stage 1 progress: submitting %d tasks (k=1..%d x %d metrics) in parallel.",
                 tasks.size(),
-                FIRST_VALID_K,
-                maxPossibleK,
+                MAX_K_TO_TEST,
                 metricDefinitions.size()
         ));
 
@@ -312,15 +299,17 @@ public class Main {
                 completedTask -> {
                     ExperimentOutcome outcome = completedTask.outcome();
                     appendCsvRows(csvRows, "STAGE_1_K_METRIC", outcome);
-                    logOutcomeSummary(
-                            "Stage 1 task finished [" + completedTask.label() + "]",
-                            outcome,
-                            completedTask.wallTimeMs()
-                    );
+                    LOGGER.info(String.format(Locale.US,
+                            "Stage 1 task finished [%s] -> score=%.4f, accuracy=%.4f, macroF1=%.4f",
+                            completedTask.label(), outcome.metrics().selectionScore(), outcome.metrics().accuracy(), outcome.metrics().macroF1()
+                    ));
 
                     if (isBetter(outcome, bestOutcomeHolder[0])) {
                         bestOutcomeHolder[0] = outcome;
-                        LOGGER.info("Stage 1 new global best: " + describeOutcome(bestOutcomeHolder[0]));
+                        LOGGER.info(String.format(Locale.US,
+                                "Stage 1 NEW GLOBAL BEST: k=%d, metric=%s -> score=%.4f",
+                                outcome.k(), outcome.metricDefinition().name(), outcome.metrics().selectionScore()
+                        ));
                     }
                 }
         );
@@ -329,10 +318,10 @@ public class Main {
                 bestOutcomeHolder[0],
                 String.format(
                         Locale.US,
-                        "Stage 1 summary: testedK=%d, testedCombinations=%d, maxPossibleK=%d, score=harmonicMean(accuracy,macroF1), stopReason=FULL_SCAN_COMPLETED",
-                        maxPossibleK - FIRST_VALID_K + 1,
+                        "Stage 1 summary: testedK=%d, testedCombinations=%d, bestScore=%.4f, stopReason=FULL_SCAN_COMPLETED",
+                        MAX_K_TO_TEST,
                         tasks.size(),
-                        maxPossibleK
+                        (bestOutcomeHolder[0] != null) ? bestOutcomeHolder[0].metrics().selectionScore() : 0.0
                 )
         );
     }
@@ -348,24 +337,20 @@ public class Main {
         List<ExperimentTask> tasks = new ArrayList<>();
         for (double trainRatio : SPLIT_RATIOS) {
             DatasetSplit split = preparedSplits.get(trainRatio);
-            if (split == null || split.trainingSet().isEmpty() || split.testSet().isEmpty()) {
-                continue;
-            }
 
-            final double currentTrainRatio = trainRatio;
             tasks.add(new ExperimentTask(
                     String.format(
                             Locale.US,
-                            "split=%.0f/%.0f train=%d test=%d effectiveK=%d",
-                            currentTrainRatio * 100,
-                            (1.0 - currentTrainRatio) * 100,
+                            "split=%.0f/%.0f train=%d test=%d k=%d",
+                            trainRatio * 100,
+                            (1.0 - trainRatio) * 100,
                             split.trainingSet().size(),
                             split.testSet().size(),
-                            Math.min(k, split.trainingSet().size())
+                            k
                     ),
                     () -> runSingleExperiment(
                             split,
-                            currentTrainRatio,
+                            trainRatio,
                             metricDefinition,
                             k,
                             activeFeatures,
@@ -390,11 +375,17 @@ public class Main {
                 completedTask -> {
                     ExperimentOutcome outcome = completedTask.outcome();
                     appendCsvRows(csvRows, "STAGE_2_SPLIT", outcome);
-                    logOutcomeSummary("Stage 2 split finished [" + completedTask.label() + "]", outcome, completedTask.wallTimeMs());
+                    LOGGER.info(String.format(Locale.US,
+                            "Stage 2 split finished [%s] -> score=%.4f, accuracy=%.4f, macroF1=%.4f",
+                            completedTask.label(), outcome.metrics().selectionScore(), outcome.metrics().accuracy(), outcome.metrics().macroF1()
+                    ));
 
                     if (isBetter(outcome, bestOutcomeHolder[0])) {
                         bestOutcomeHolder[0] = outcome;
-                        LOGGER.info("Stage 2 new best: " + describeOutcome(bestOutcomeHolder[0]));
+                        LOGGER.info(String.format(Locale.US,
+                                "Stage 2 NEW BEST: split=%.0f/%.0f -> score=%.4f",
+                                outcome.trainRatio() * 100, (1.0 - outcome.trainRatio()) * 100, outcome.metrics().selectionScore()
+                        ));
                     }
                 }
         );
@@ -450,7 +441,10 @@ public class Main {
 
                     if (isBetter(outcome, bestOutcomeHolder[0])) {
                         bestOutcomeHolder[0] = outcome;
-                        LOGGER.info("Stage 3 new best: " + describeOutcome(bestOutcomeHolder[0]));
+                        LOGGER.info(String.format(Locale.US,
+                                "Stage 3 NEW BEST: featuresCount=%d, features=[%s] -> score=%.4f",
+                                outcome.activeFeatures().size(), formatFeatureSet(outcome.activeFeatures()), outcome.metrics().selectionScore()
+                        ));
                     }
                 }
         );
@@ -464,8 +458,7 @@ public class Main {
     private static DatasetSplit createNormalizedSplit(List<FeatureVector> dataset,
                                                       double trainRatio,
                                                       NormalizationService normalizationService) {
-        int trainCount = Math.max(1, (int) (dataset.size() * trainRatio));
-        trainCount = Math.min(trainCount, dataset.size() - 1);
+        int trainCount = (int) (dataset.size() * trainRatio);
 
         List<FeatureVector> rawTrainingSet = dataset.subList(0, trainCount);
         List<FeatureVector> rawTestSet = dataset.subList(trainCount, dataset.size());
@@ -725,50 +718,13 @@ public class Main {
     }
 
     private static boolean isBetter(ExperimentOutcome candidate, ExperimentOutcome currentBest) {
-        if (candidate == null) {
-            return false;
+        if (currentBest == null) return true;
+
+        if (candidate.metrics().selectionScore() != currentBest.metrics().selectionScore()) {
+            return candidate.metrics().selectionScore() > currentBest.metrics().selectionScore();
         }
 
-        if (currentBest == null) {
-            return true;
-        }
-
-        int comparison = Double.compare(candidate.metrics().selectionScore(), currentBest.metrics().selectionScore());
-        if (comparison != 0) {
-            return comparison > 0;
-        }
-
-        comparison = Double.compare(candidate.metrics().accuracy(), currentBest.metrics().accuracy());
-        if (comparison != 0) {
-            return comparison > 0;
-        }
-
-        comparison = Double.compare(candidate.metrics().macroF1(), currentBest.metrics().macroF1());
-        if (comparison != 0) {
-            return comparison > 0;
-        }
-
-        comparison = Double.compare(candidate.metrics().macroPrecision(), currentBest.metrics().macroPrecision());
-        if (comparison != 0) {
-            return comparison > 0;
-        }
-
-        comparison = Double.compare(candidate.metrics().macroRecall(), currentBest.metrics().macroRecall());
-        if (comparison != 0) {
-            return comparison > 0;
-        }
-
-        comparison = Integer.compare(currentBest.activeFeatures().size(), candidate.activeFeatures().size());
-        if (comparison != 0) {
-            return comparison > 0;
-        }
-
-        comparison = Integer.compare(currentBest.k(), candidate.k());
-        if (comparison != 0) {
-            return comparison > 0;
-        }
-
-        return formatFeatureSet(candidate.activeFeatures()).compareTo(formatFeatureSet(currentBest.activeFeatures())) < 0;
+        return candidate.activeFeatures().size() < currentBest.activeFeatures().size();
     }
 
     private static void appendCsvRows(List<String> csvRows, String stageName, ExperimentOutcome outcome) {
@@ -815,42 +771,6 @@ public class Main {
 
     private static String csvHeader() {
         return "Stage;TrainRatio;TestRatio;Metric;K;FeatureCount;Features;RowType;Class;SelectionScore;Accuracy;Precision;Recall;F1;DurationMs";
-    }
-
-    private static String describeOutcome(ExperimentOutcome outcome) {
-        if (outcome == null) {
-            return "no result";
-        }
-
-        return String.format(
-                Locale.US,
-                "k=%d, metric=%s, train/test=%.0f/%.0f, features=%s, selectionScore=%.4f, accuracy=%.4f, macroF1=%.4f",
-                outcome.k(),
-                outcome.metricDefinition().name(),
-                outcome.trainRatio() * 100,
-                (1.0 - outcome.trainRatio()) * 100,
-                formatFeatureSet(outcome.activeFeatures()),
-                outcome.metrics().selectionScore(),
-                outcome.metrics().accuracy(),
-                outcome.metrics().macroF1()
-        );
-    }
-
-    private static void logOutcomeSummary(String prefix, ExperimentOutcome outcome, long wallTimeMs) {
-        LOGGER.info(String.format(
-                Locale.US,
-                "%s -> score=%.6f, accuracy=%.6f, macroF1=%.6f, split=%.0f/%.0f, k=%d, metric=%s, featureCount=%d, wallTime=%d ms.",
-                prefix,
-                outcome.metrics().selectionScore(),
-                outcome.metrics().accuracy(),
-                outcome.metrics().macroF1(),
-                outcome.trainRatio() * 100,
-                (1.0 - outcome.trainRatio()) * 100,
-                outcome.k(),
-                outcome.metricDefinition().name(),
-                outcome.activeFeatures().size(),
-                wallTimeMs
-        ));
     }
 
     private static String formatFeatureSet(Set<FeatureName> activeFeatures) {
