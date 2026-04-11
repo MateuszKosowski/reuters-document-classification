@@ -37,7 +37,6 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -76,10 +75,6 @@ public class Main {
         ExecutorService executor = null;
         try {
             List<FeatureVector> dataset = loadAndPrepareDataset();
-            if (dataset.size() < 2) {
-                LOGGER.warning("Dataset is too small to run the experiment.");
-                return;
-            }
 
             List<MetricDefinition> metricDefinitions = createMetricDefinitions();
             EnumSet<FeatureName> fullFeatureSet = EnumSet.allOf(FeatureName.class);
@@ -89,7 +84,7 @@ public class Main {
             KnnClassifier classifier = new KnnClassifier();
             QualityMeasureService qualityService = new QualityMeasureService();
 
-            Path outputDirectory = prepareOutputDirectory();
+            Path outputDirectory = exportService.prepareOutputDirectory(OUTPUT_DIRECTORY);
             int threadPoolSize = Math.max(1, Runtime.getRuntime().availableProcessors());
             LOGGER.info("Using fixed thread pool size = " + threadPoolSize);
 
@@ -927,16 +922,6 @@ public class Main {
                 seconds,
                 milliseconds
         );
-    }
-
-    private static Path prepareOutputDirectory() {
-        try {
-            Path outputDirectory = Path.of(OUTPUT_DIRECTORY);
-            Files.createDirectories(outputDirectory);
-            return outputDirectory;
-        } catch (IOException exception) {
-            throw new IllegalStateException("Failed to create output directory.", exception);
-        }
     }
 
     private static void shutdownExecutor(ExecutorService executor) {

@@ -3,6 +3,8 @@ package org.kosowskiinowak.service;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -12,6 +14,16 @@ import java.util.logging.Logger;
 public class ResultsExportService {
 
     private static final Logger LOGGER = Logger.getLogger(ResultsExportService.class.getName());
+
+    public Path prepareOutputDirectory(String directoryName) {
+        try {
+            Path outputDirectory = Path.of(directoryName);
+            Files.createDirectories(outputDirectory);
+            return outputDirectory;
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to create output directory: " + directoryName, exception);
+        }
+    }
 
     public void exportToCsv(List<String> csvResults, String outputFileName) {
         if (csvResults == null || csvResults.isEmpty()) {
@@ -36,4 +48,3 @@ public class ResultsExportService {
         }
     }
 }
-
