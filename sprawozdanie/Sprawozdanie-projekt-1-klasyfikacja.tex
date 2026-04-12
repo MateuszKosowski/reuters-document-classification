@@ -741,9 +741,10 @@ sygnał.
 
 Zwraca uwagę też kształt wykresu pudełkowego (rysunek~\ref{fig:stage3_count}):
 przy małej liczbie cech rozrzut F1~makro między różnymi podzbiorami jest bardzo
-szeroki i wynik silnie zależy od tego, które konkretnie cechy wybrano,
-natomiast przy 7--9 cechach poszczególne podzbiory mocno się ze sobą przekrywają
-i wybór staje się mniej krytyczny.
+szeroki i wynik silnie zależy od tego, które konkretnie cechy wybrano. Przy 7--9
+cechach rozrzut jest znikomy, bo dowolne dwa podzbiory tej wielkości muszą mieć
+większość cech wspólnych (np. dwa różne 8-elementowe zestawy mają zawsze co
+najmniej 6 wspólnych cech), więc dają zbliżone wyniki.
 
 Zgodnie z analizą częstości na rysunku~\ref{fig:stage3_freq} cechy
 \textit{longestWord} i \textit{mostFrequentWord} pojawiają się praktycznie
@@ -771,20 +772,20 @@ silną asymetrię wyników między klasami:
 
     \item \textbf{uk}: F1~$=0{,}556$, Precision~$=0{,}615$, Recall~$=0{,}508$.
     Nieco ponad połowa dokumentów z tej klasy jest poprawnie wykrywana,
-    a około 62\% przypisań do \textit{uk} okazuje się trafnych. Pozostała część
-    prawdziwych dokumentów UK trafia do innych klas, najczęściej \textit{usa}.
+    a około 62\% przypisań do \textit{uk} okazuje się trafnych -- pozostałe
+    prawdziwe dokumenty UK są klasyfikowane jako jedna z innych klas.
 
     \item \textbf{japan}: F1~$=0{,}374$, Precision i Recall na zbliżonym
     poziomie ($\approx 0{,}37$). Klasyfikator nie jest tu ani nadmiernie
-    ostrożny, ani nadmiernie agresywny -- po prostu w połowie przypadków nie
-    znajduje wystarczającej liczby ,,japońskich'' sąsiadów w sąsiedztwie
-    testowanego dokumentu.
+    ostrożny, ani nadmiernie agresywny -- popełnia podobnie dużo błędów obu
+    typów, a poprawnie rozpoznaje tylko nieco ponad jedną trzecią dokumentów
+    tej klasy.
 
     \item \textbf{west-germany}, \textbf{france}, \textbf{canada}: F1 poniżej
-    $0{,}34$, Recall poniżej $0{,}27$. Większość dokumentów z tych klas trafia
-    do innej klasy, najczęściej \textit{usa}. Przyczyną jest mała reprezentacja
-    tych klas w zbiorze uczącym -- przy $k=4$ wystarczy, że wśród sąsiadów
-    znajdą się dwa dokumenty \textit{usa}, by głosowanie zignorowało prawdziwą
+    $0{,}34$, Recall poniżej $0{,}27$. Klasyfikator wykrywa mniej niż jeden na
+    czterech dokumentów z tych klas. Przyczyną jest ich mała reprezentacja
+    w zbiorze uczącym -- przy $k=4$ wystarczy, że wśród sąsiadów znajdą się
+    dwa dokumenty z klasy większościowej, by głosowanie zignorowało prawdziwą
     etykietę.
 \end{itemize}
 
