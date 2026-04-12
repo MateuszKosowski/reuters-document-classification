@@ -5,6 +5,12 @@
 \usepackage{url}
 \usepackage{amsmath} % Dodano do obslugi wzorow matematycznych
 \DeclareMathOperator*{\argmax}{arg\,max} % Definicja operatora argmax
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{multirow}
+\graphicspath{{plots/}}
 
 %{Informatyka stosowana 2020, I st., semestr VI}
 
@@ -351,40 +357,465 @@ zwraca wyłącznie największą pojedynczą różnicę. Dla klasyfikatora $k$-NN
 tym samym zbiorze cech różne metryki mogą prowadzić do innego uporządkowania sąsiadów, a w
 konsekwencji do innej decyzji klasyfikacyjnej.
 
+% ─────────────────────────────────────────────────────────────────────────────
 \section{Wyniki klasyfikacji dla różnych parametrów wejściowych}
-Wstępne wyniki miary Accuracy dla próbnych klasyfikacji na ograniczonym zbiorze tekstów (podać parametry i kryteria
-wyboru wg punktów 3.-8. z opisu Projektu 1.).
-\noindent {\bf Sekcja uzupełniona jako efekt zadania Tydzień 05 wg Harmonogramu Zajęć
-na WIKAMP KSR.}
+
+Eksperymenty przeprowadzono w trzech etapach sekwencyjnych (każdy kolejny etap
+korzysta z najlepszych ustawień poprzedniego), a następnie wyznaczono wynik
+finalny dla optymalnej konfiguracji. Pełne dane źródłowe dla wszystkich
+kombinacji parametrów znajdują się w plikach CSV dołączonych do projektu.
+
+% ── ETAP 1 ───────────────────────────────────────────────────────────────────
+\subsection{Etap 1 – dobór metryki odległości i wartości $k$}
+
+\textbf{Warunki eksperymentu:} podział zbioru 50/50 (uczący/testowy), wszystkie
+10 cech, przeszukano $k \in \{1, \ldots, 30\}$ dla każdej z trzech metryk
+(Manhattan, euklidesowej, Czebyszewa). Wyniki agregowane jako wartości makro
+(średnia arytmetyczna po wszystkich 6 klasach). Kryterium wyboru najlepszej
+konfiguracji stanowiła miara $S$ zdefiniowana jako średnia harmoniczna Accuracy i F1~makro:
+\begin{equation}
+    S = \frac{2 \cdot Acc \cdot F1_{makro}}{Acc + F1_{makro}}
+\end{equation}
+Miara $S$ karze jednocześnie za niskie Accuracy (słabą ogólną skuteczność)
+i niskie F1~makro (słabe rozróżnianie klas mniejszościowych). Jest tożsama
+ze wzorem na F1 -- stanowi zatem uogólnienie miary F1 na parę
+(Accuracy, F1~makro) zamiast (Precision, Recall).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{stage1_k_metric.png}
+    \caption{F1 makro (lewy panel) i Accuracy (prawy panel) w funkcji $k$ dla
+    trzech metryk odległości. Eksperyment przeprowadzony na podziale 50/50,
+    z wykorzystaniem wszystkich 10 cech. Widoczna jest odwrotna zależność między
+    F1 makro a Accuracy wraz ze wzrostem $k$ – mimo rosnącej Accuracy ogólna
+    zdolność rozróżniania klas maleje.}
+    \label{fig:stage1_k_metric}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{stage1_prec_rec_f1.png}
+    \caption{Precision makro, Recall makro i F1 makro w funkcji $k$ dla każdej
+    metryki oddzielnie. Wraz ze wzrostem $k$ Precision rośnie, a Recall maleje –
+    klasyfikator staje się coraz bardziej ,,ostrożny'': rzadziej przypisuje
+    mniejszościowe klasy, więc gdy już to robi, częściej ma rację (wysoka
+    precyzja), lecz pomija coraz więcej prawdziwych przykładów (niski recall).
+    Optimum F1 dla metryki Manhattan leży przy $k=4$.}
+    \label{fig:stage1_prec_rec}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\textwidth]{stage1_metric_comparison.png}
+    \caption{Porównanie miar Accuracy, Precision, Recall i F1 makro przy
+    optymalnym $k$ wyznaczonym niezależnie dla każdej metryki: Manhattan
+    ($k=4$), euklidesowej ($k=3$), Czebyszewa ($k=2$). Metryka Manhattan
+    dominuje pod względem Recall i F1 makro, co oznacza lepszą równowagę
+    między klasami.}
+    \label{fig:stage1_comparison}
+\end{figure}
+
+Pełne wyniki dla wszystkich kombinacji metryki i $k$ zebrano w
+tabeli~\ref{tab:stage1_top}. Przedstawiono wyłącznie konfiguracje
+o najwyższym wartości miary $S$ dla każdej metryki.
+
+\begin{table}[H]
+\centering
+\caption{Najlepsze wyniki (wg miary $S$) dla każdej metryki w
+Etapie~1. Podział 50/50, wszystkie 10 cech.}
+\label{tab:stage1_top}
+\begin{tabular}{lrrrrrr}
+\toprule
+Metryka & $k$ & Accuracy & Precision & Recall & F1 makro & $S$ \\
+\midrule
+Manhattan  & 4  & 0{,}820 & 0{,}508 & 0{,}399 & 0{,}434 & 0{,}568 \\
+Euclidean  & 3  & 0{,}796 & 0{,}431 & 0{,}363 & 0{,}387 & 0{,}521 \\
+Chebyshev  & 2  & 0{,}761 & 0{,}387 & 0{,}365 & 0{,}374 & 0{,}502 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Wybrana konfiguracja:} metryka Manhattan, $k=4$.
+
+% ── ETAP 2 ───────────────────────────────────────────────────────────────────
+\subsection{Etap 2 – dobór proporcji podziału zbioru}
+
+\textbf{Warunki eksperymentu:} metryka Manhattan, $k=4$, wszystkie 10 cech.
+Sprawdzono dziewięć podziałów uczący/testowy: od 10/90 do 90/10 (co 10\,pp.).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{stage2_split.png}
+    \caption{Wpływ proporcji podziału zbioru uczącego i testowego na Accuracy,
+    Precision makro, Recall makro i F1 makro. Metryka Manhattan, $k=4$,
+    wszystkie 10 cech. Liczby nad słupkami F1 podają dokładne wartości. Recall
+    rośnie wraz ze wzrostem zbioru uczącego, natomiast Accuracy i F1 osiągają
+    maksimum przy podziale 60/40.}
+    \label{fig:stage2_split}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Wyniki dla wszystkich proporcji podziału (Etap~2).
+Metryka Manhattan, $k=4$, wszystkie 10~cech. Wartości makro.}
+\label{tab:stage2}
+\begin{tabular}{ccrrrr}
+\toprule
+Uczący & Testowy & Accuracy & Precision & Recall & F1 makro \\
+\midrule
+10\% & 90\% & 0{,}802 & 0{,}446 & 0{,}307 & 0{,}341 \\
+20\% & 80\% & 0{,}811 & 0{,}491 & 0{,}355 & 0{,}395 \\
+30\% & 70\% & 0{,}811 & 0{,}491 & 0{,}376 & 0{,}409 \\
+40\% & 60\% & 0{,}816 & 0{,}508 & 0{,}389 & 0{,}426 \\
+50\% & 50\% & 0{,}820 & 0{,}508 & 0{,}399 & 0{,}434 \\
+\textbf{60\%} & \textbf{40\%} & \textbf{0{,}823} & \textbf{0{,}520} & \textbf{0{,}406} & \textbf{0{,}444} \\
+70\% & 30\% & 0{,}819 & 0{,}512 & 0{,}407 & 0{,}442 \\
+80\% & 20\% & 0{,}816 & 0{,}499 & 0{,}405 & 0{,}438 \\
+90\% & 10\% & 0{,}825 & 0{,}498 & 0{,}413 & 0{,}443 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Wybrana konfiguracja:} podział 60\%/40\%.
+
+% ── ETAP 3 ───────────────────────────────────────────────────────────────────
+\subsection{Etap 3 – dobór podzbioru cech}
+
+\textbf{Warunki eksperymentu:} metryka Manhattan, $k=4$, podział 60/40.
+Sprawdzono wszystkie $\binom{10}{1}+\binom{10}{2}+\cdots+\binom{10}{9} = 1\,013$
+podzbiorów cech o liczności od 1 do 9 (pełny zestaw 10 cech był punktem
+odniesienia z Etapu~2).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{stage3_feature_count.png}
+    \caption{Lewy panel: średnia F1 makro (linia niebieska) i max F1 makro
+    (linia przerywana) w funkcji liczby cech; zakres min--max zaznaczony
+    wypełnieniem; oś prawa (czerwona) – średnia Accuracy. Prawy panel: rozkład
+    F1 makro dla wszystkich podzbiorów danej liczności (wykres pudełkowy).
+    Metryka Manhattan, $k=4$, podział 60/40. Zarówno średnia, jak i maksymalna
+    F1 rosną monotoniczne z liczbą cech, jednak wariancja wyników spada – mniejszy
+    podzbiór jest silniej wrażliwy na dobór konkretnych cech.}
+    \label{fig:stage3_count}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{stage3_feature_frequency.png}
+    \caption{Częstość występowania każdej cechy w Top-20, Top-50, Top-100
+    i wszystkich 1\,013 konfiguracjach (Etap~3, Manhattan, $k=4$, podział 60/40).
+    Cechy \textit{Najdłuższe słowo} i \textit{Najczęstsze słowo} dominują w
+    każdym zakresie, co wskazuje na ich wysoką wartość dyskryminacyjną.
+    \textit{Indeks Flescha} i \textit{Bogactwo słownictwa} zajmują kolejne
+    miejsca w Top-20/50.}
+    \label{fig:stage3_freq}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Statystyki F1 makro i Accuracy według liczby cech (Etap~3).
+Metryka Manhattan, $k=4$, podział 60/40.
+Kolumna $n$ – liczba testowanych podzbiorów.}
+\label{tab:stage3_count}
+\begin{tabular}{crrrrrr}
+\toprule
+Liczba cech & $n$ & Śr. F1 & Max F1 & Śr. Accuracy & Max Accuracy \\
+\midrule
+1 & 10  & 0{,}204 & 0{,}362 & 0{,}772 & 0{,}815 \\
+2 & 45  & 0{,}262 & 0{,}403 & 0{,}775 & 0{,}812 \\
+3 & 120 & 0{,}305 & 0{,}419 & 0{,}784 & 0{,}813 \\
+4 & 210 & 0{,}341 & 0{,}436 & 0{,}792 & 0{,}819 \\
+5 & 252 & 0{,}370 & 0{,}441 & 0{,}800 & 0{,}820 \\
+6 & 210 & 0{,}393 & 0{,}443 & 0{,}806 & 0{,}822 \\
+7 & 120 & 0{,}411 & 0{,}449 & 0{,}811 & 0{,}822 \\
+8 &  45 & 0{,}424 & 0{,}447 & 0{,}815 & 0{,}823 \\
+\textbf{9} & \textbf{10}  & 0{,}435 & \textbf{0{,}449} & 0{,}819 & \textbf{0{,}823} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Wybrana konfiguracja:} 9~cech (wszystkie oprócz \textit{sumOfAllNumericValues}):
+\textit{longestWord} (najdłuższe słowo),
+\textit{mostFrequentWord} (najczęstsze słowo),
+\textit{averageWordLength} (śr. długość słowa),
+\textit{vocabularyRichness} (bogactwo słownictwa),
+\textit{averageSentenceLength} (śr. długość zdania),
+\textit{uppercaseLetterRatio} (udział wielkich liter),
+\textit{financialSignDensity} (znaki finansowe),
+\textit{fleschReadingEaseIndex} (indeks czytelności Flescha),
+\textit{vowelToConsonantRatio} (stosunek samogłosek do spółgłosek).
+
+% ── WPŁYW POJEDYNCZYCH CECH NA ACCURACY ──────────────────────────────────────
+\subsection{Wpływ poszczególnych cech na Accuracy}
+
+W celu wskazania, które cechy mają największy i najmniejszy wpływ na jakość
+klasyfikacji, przeprowadzono dwa uzupełniające eksperymenty
+(rysunek~\ref{fig:stage3_ablation}):
+
+\begin{enumerate}
+    \item \textbf{Analiza jednej cechy:} klasyfikację uruchomiono osobno dla
+    każdej z 10 cech (podzbiory 1-elementowe). Accuracy waha się od
+    $0{,}760$ (najczęstsze słowo) do $0{,}815$ (najdłuższe słowo).
+    Punkt odniesienia to Accuracy$=0{,}823$ dla pełnego zestawu 10 cech.
+
+    \item \textbf{Ablacja (leave-one-out):} z pełnego zestawu 10 cech
+    usuwano po jednej cesze i mierzono zmianę Accuracy względem baseline.
+    Wyniki zebrano w tabeli~\ref{tab:ablation}.
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\caption{Wpływ usunięcia jednej cechy z pełnego zestawu 10 cech na Accuracy
+i F1~makro (ablacja). Baseline: Manhattan, $k=4$, podział 60/40, 10~cech,
+Accuracy\,=\,0{,}823, F1\,=\,0{,}444. Wartości $\Delta$ ujemne oznaczają,
+że usunięcie cechy \emph{pogorszyło} wynik; wartości dodatnie – że cecha
+\emph{nie wnosiła} użytecznej informacji.}
+\label{tab:ablation}
+\begin{tabular}{lrrrr}
+\toprule
+Usunięta cecha & Accuracy & F1 makro & $\Delta$Acc & $\Delta$F1 \\
+\midrule
+Najdłuższe słowo        & 0{,}807 & 0{,}419 & $-$0{,}016 & $-$0{,}024 \\
+Najczęstsze słowo       & 0{,}812 & 0{,}419 & $-$0{,}011 & $-$0{,}025 \\
+Stosunek sam./spół.     & 0{,}818 & 0{,}431 & $-$0{,}005 & $-$0{,}012 \\
+Udział wielkich liter   & 0{,}820 & 0{,}442 & $-$0{,}003 & $-$0{,}002 \\
+Indeks Flescha          & 0{,}820 & 0{,}436 & $-$0{,}003 & $-$0{,}008 \\
+Zn. finansowe           & 0{,}820 & 0{,}441 & $-$0{,}002 & $-$0{,}003 \\
+Bogactwo słownictwa     & 0{,}822 & 0{,}435 & $-$0{,}001 & $-$0{,}009 \\
+Śr. długość zdania      & 0{,}822 & 0{,}442 & $\pm$0{,}000 & $-$0{,}002 \\
+Śr. długość słowa       & 0{,}823 & 0{,}441 & $+$0{,}000 & $-$0{,}003 \\
+Suma wartości liczb.    & 0{,}823 & 0{,}449 & $+$0{,}000 & $+$0{,}005 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{stage3_ablation.png}
+    \caption{Lewy panel: Accuracy i F1~makro dla każdej cechy używanej osobno
+    (podzbiory 1-elementowe); pionowa linia przerywana to Accuracy dla pełnego
+    zestawu 10~cech. Prawy panel: zmiana Accuracy i F1~makro po usunięciu jednej
+    cechy z zestawu 10~cech (ablacja); słupki czerwone oznaczają pogorszenie
+    Accuracy, zielone – poprawę. Metryka Manhattan, $k=4$, podział 60/40.}
+    \label{fig:stage3_ablation}
+\end{figure}
+
+Z analizy ablacyjnej wynika, że \textbf{cechami o największym wpływie na
+Accuracy} są: \textit{najdłuższe słowo} ($\Delta$Acc\,=\,$-$0{,}016)
+i \textit{najczęstsze słowo} ($-$0{,}011) -- ich usunięcie powoduje
+największy spadek skuteczności. \textbf{Cechami o najmniejszym wpływie}
+są: \textit{suma wartości liczbowych}, \textit{śr. długość słowa}
+i \textit{śr. długość zdania} ($\Delta$Acc~$\approx$~0).
+
+Interesującym przypadkiem jest \textit{suma wartości liczbowych}: jej
+usunięcie praktycznie nie zmienia Accuracy ($+$0{,}000), ale poprawia
+F1~makro ($+$0{,}005). Oznacza to, że cecha ta wprowadza pewien szum
+przy klasyfikacji klas dominujących, a jednocześnie nie pomaga klasom
+mniejszościowym -- stąd właśnie jest jedyną cechą wykluczoną z
+optymalnego podzbioru 9~cech wyznaczonego w Etapie~3.
+
+% ── WYNIK FINALNY ─────────────────────────────────────────────────────────────
+\subsection{Wynik finalny – optymalna konfiguracja}
+
+Ostateczna klasyfikacja przeprowadzona z parametrami wyznaczonymi w Etapach~1--3
+(metryka Manhattan, $k=4$, podział 60/40, 9~cech) osiągnęła następujące wyniki
+makro: Accuracy~$= 0{,}823$, Precision~$= 0{,}524$, Recall~$= 0{,}412$,
+F1~$= 0{,}449$. Wyniki dla poszczególnych klas zestawiono w
+tabeli~\ref{tab:best_per_class} i na rysunku~\ref{fig:best_per_class}.
+
+\begin{table}[H]
+\centering
+\caption{Precision, Recall i F1 dla każdej z 6 klas oraz wartości makro –
+najlepsza konfiguracja (Manhattan, $k=4$, podział 60/40, 9~cech).}
+\label{tab:best_per_class}
+\begin{tabular}{lrrr}
+\toprule
+Klasa & Precision & Recall & F1 \\
+\midrule
+usa          & 0{,}873 & 0{,}948 & 0{,}909 \\
+uk           & 0{,}615 & 0{,}508 & 0{,}556 \\
+japan        & 0{,}381 & 0{,}367 & 0{,}374 \\
+west-germany & 0{,}453 & 0{,}264 & 0{,}333 \\
+france       & 0{,}414 & 0{,}224 & 0{,}291 \\
+canada       & 0{,}405 & 0{,}160 & 0{,}229 \\
+\midrule
+\textbf{Makro} & \textbf{0{,}524} & \textbf{0{,}412} & \textbf{0{,}449} \\
+\midrule
+\multicolumn{3}{l}{Accuracy} & \textbf{0{,}823} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{best_per_class.png}
+    \caption{Precision, Recall i F1 dla każdej klasy – najlepsza konfiguracja
+    (Manhattan, $k=4$, podział 60/40, 9~cech: wszystkie oprócz
+    \textit{sumOfAllNumericValues}).
+    Wartości F1 podane nad słupkami. Linie przerywane oznaczają wartości makro
+    F1 i Accuracy dla całego zbioru testowego.}
+    \label{fig:best_per_class}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\textwidth]{best_precision_recall_scatter.png}
+    \caption{Diagram Precision--Recall dla każdej klasy. Rozmiar punktu jest
+    proporcjonalny do wartości F1 danej klasy. Klasy o małej liczebności
+    (canada, france) skupiają się w lewym dolnym rogu, co wskazuje na trudność
+    z ich wykrywaniem. Klasa \textit{usa} leży wyraźnie powyżej linii
+    Precision\,=\,Recall, co oznacza, że model ,,preferuje'' przypisywanie tej
+    klasy (wysoki Recall kosztem nieco mniejszej Precision).}
+    \label{fig:best_scatter}
+\end{figure}
 
 
-\section{Dyskusja, wnioski, sprawozdanie końcowe}
-We wnioskach z badania skomentować wyłącznie wpływ parametrów i cech na jakość procesu klasyfikacji. Innymi słowy – wnioski to to, co wynika z przeprowadzonych obliczeń, a nie to co wiadomo z literatury.
-Znaczenie kolejnych eksperymentów wg punktów 2.-8. opisu projektu 1.  Każdorazowo
-podane parametry, dla których przeprowadzana eksperyment.
-Wykresy (np. słupkowe) i tabele wyników
-obowiązkowe, dokładnie opisane w ,,captions'' (tytułach), konieczny opis osi i
-jednostek wykresów oraz kolumn i wierszy tabel.\\
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Dyskusja i wnioski}
 
-\textbf{Ewentualne wyniki realizacji punktu 9. opisu Projektu 1., czyli ,,na ocenę 5.0'', i ich porównanie do wyników z
-części obowiązkowej.} Dokładne interpretacje uzyskanych wyników w zależności od parametrów klasyfikacji
-opisanych w punktach 3.-8 opisu Projektu 1.
-Omówić i wyjaśnić napotkane problemy (jeśli były). Każdy wniosek/problem powinien mieć poparcie
-w przeprowadzonych eksperymentach (odwołania do konkretnych wyników: wykresów,
-tabel). \\
-\underline{Dla końcowej oceny jest to najważniejsza sekcja} sprawozdania, gdyż prezentuje poziom
-zrozumienia rozwiązywanego problemu.\\
+\subsection{Wpływ metryki odległości}
 
-\textbf{Możliwości kontynuacji prac w obszarze systemów rozpoznawania, zwłaszcza w kontekście pracy inżynierskiej,
-magisterskiej, naukowej, itp.}\\
+Spośród trzech badanych metryk najlepsze wyniki dała metryka Manhattan.
+Przy optymalnym dla niej $k=4$ osiągnęła Accuracy~$=0{,}820$, F1~makro~$=0{,}434$
+oraz $S=0{,}568$. Metryka euklidesowa najlepszy wynik uzyskała przy $k=3$
+($Accuracy=0{,}796$, $F1=0{,}387$, $S=0{,}521$), a metryka Czebyszewa przy $k=2$
+($Accuracy=0{,}761$, $F1=0{,}374$, $S=0{,}502$). Co istotne, przewaga Manhattan
+nie ogranicza się do punktu optymalnego -- jest widoczna konsekwentnie dla
+wszystkich badanych wartości $k$ (rysunek~\ref{fig:stage1_k_metric}).
 
-\noindent {\bf Sekcja uzupełniona jako efekt zadań Tydzień 05 i Tydzień 06 wg Harmonogramu Zajęć
-na WIKAMP KSR.}
+Wynik ten można powiązać z charakterem porównywanych wektorów. Po normalizacji
+min--max różnice na poszczególnych cechach mieszczą się w przedziale $[0,1]$
+i zazwyczaj są niewielkie, ale rozkładają się na kilka wymiarów jednocześnie.
+Manhattan sumuje wszystkie te drobne różnice z równą wagą, dzięki czemu
+korzysta z informacji ze wszystkich cech naraz. Metryka euklidesowa, ze względu
+na podnoszenie różnic do kwadratu, mocniej akcentuje pojedyncze większe
+odchylenia kosztem wkładu pozostałych. Najsłabiej wypada metryka Czebyszewa,
+która z definicji bierze pod uwagę tylko jeden, największy wymiar -- pozostałe
+dziewięć cech jest w niej całkowicie pomijanych przy każdej parze wektorów.
 
+\subsection{Wpływ wartości $k$}
 
-\section{Braki w realizacji projektu 1.}
-Wymienić wg opisu Projektu 1. wszystkie niezrealizowane obowiązkowe elementy projektu, ewentualnie
-podać merytoryczne (ale nie czasowe) przyczyny tych braków.
+Na rysunkach~\ref{fig:stage1_k_metric} i~\ref{fig:stage1_prec_rec} widać
+charakterystyczny ,,nożycowy'' efekt: wraz ze wzrostem $k$ Accuracy lekko
+rośnie (dla metryki Manhattan: od $0{,}777$ przy $k=1$ do $0{,}825$ przy
+$k=30$), natomiast F1~makro systematycznie spada (od $0{,}439$ do $0{,}319$).
+Jednocześnie Precision rośnie, a Recall maleje.
+
+Wynika to wprost z niezbalansowania zbioru -- klasa \textit{usa} ma znacznie
+więcej dokumentów niż wszystkie pozostałe klasy razem. Przy małym $k$ kilku
+sąsiadów z klasy mniejszościowej wystarcza, by przegłosować pojedynczych
+sąsiadów \textit{usa}. Przy dużym $k$ wśród branych pod uwagę sąsiadów zaczynają
+dominować dokumenty \textit{usa}, więc klasyfikator coraz częściej odpowiada
+\textit{usa} niezależnie od rzeczywistej klasy: liczba poprawnych trafień na
+klasie większościowej rośnie (Accuracy), ale klasy mniejszościowe są pomijane
+(Recall i F1~makro spadają). Najlepszy kompromis wypada przy $k=4$ dla metryki
+Manhattan: F1~makro~$=0{,}434$ przy Accuracy~$=0{,}820$.
+
+\subsection{Wpływ podziału zbioru uczącego i testowego}
+
+Wyniki (tabela~\ref{tab:stage2}, rysunek~\ref{fig:stage2_split}) pokazują
+wyraźny wzrost jakości klasyfikacji wraz z powiększaniem zbioru uczącego:
+F1~makro rośnie z $0{,}341$ przy podziale 10/90 do $0{,}444$ przy 60/40, czyli
+o około 10~pp. Accuracy zmienia się znacznie mniej (z $0{,}802$ do $0{,}825$),
+bo wciąż jest zdominowana przez liczną klasę \textit{usa} -- nawet skromny
+zbiór uczący wystarcza, by ją dobrze rozpoznawać.
+
+Najwyższą wartość kryterium $S$ uzyskał podział 60/40 ($S=0{,}577$). Powyżej
+tego progu (70/30, 80/20, 90/10) wyniki przestają się poprawiać, a F1~makro
+porusza się w wąskim pasie ok. $0{,}43$--$0{,}44$. Sugeruje to, że klasyfikator
+przyswoił już praktycznie wszystko, co mógł nauczyć się z dostępnych danych,
+a powiększanie zbioru uczącego kosztem testowego nie przynosi już przyrostu
+jakości.
+
+\subsection{Wpływ wyboru cech}
+
+Z tabeli~\ref{tab:stage3_count} wynika, że średnia F1~makro rośnie monotonicznie
+z liczbą używanych cech: od $0{,}204$ dla pojedynczej cechy do $0{,}435$ dla
+dziewięciu. Każda dodatkowa cecha wnosi więc średnio użyteczną informację.
+Najlepszy uzyskany wynik (F1~$=0{,}449$, Acc~$=0{,}823$) odpowiada zestawowi
+9~cech -- pominięto wyłącznie \textit{sumOfAllNumericValues}, której ablacja
+(tabela~\ref{tab:ablation}) pokazuje neutralny wpływ na Accuracy
+($\Delta=+0{,}000$) i lekko dodatni na F1 ($\Delta=+0{,}005$). Dla tego
+konkretnego zbioru cecha ta zachowuje się więc raczej jak szum niż użyteczny
+sygnał.
+
+Zwraca uwagę też kształt wykresu pudełkowego (rysunek~\ref{fig:stage3_count}):
+przy małej liczbie cech rozrzut F1~makro między różnymi podzbiorami jest bardzo
+szeroki i wynik silnie zależy od tego, które konkretnie cechy wybrano,
+natomiast przy 7--9 cechach poszczególne podzbiory mocno się ze sobą przekrywają
+i wybór staje się mniej krytyczny.
+
+Zgodnie z analizą częstości na rysunku~\ref{fig:stage3_freq} cechy
+\textit{longestWord} i \textit{mostFrequentWord} pojawiają się praktycznie
+w każdej dobrej konfiguracji. Są to dwie cechy tekstowe, porównywane miarą
+Sørensena-Dice'a. Ich wysoka wartość dyskryminacyjna potwierdza się w ablacji:
+ich usunięcie powoduje największe spadki Accuracy ($-0{,}016$ dla
+\textit{longestWord} i $-0{,}011$ dla \textit{mostFrequentWord}), wyraźnie
+większe niż dla którejkolwiek z cech liczbowych. Można to wytłumaczyć tym, że
+,,najczęstsze'' i ,,najdłuższe'' słowo dokumentu często niesie informację
+tematyczną i geograficzną (nazwa firmy, miasta, instytucji), której pojedyncza
+statystyka liczbowa po prostu nie zawiera.
+
+\subsection{Wyniki dla poszczególnych klas}
+
+Tabela~\ref{tab:best_per_class} i rysunek~\ref{fig:best_per_class} ujawniają
+silną asymetrię wyników między klasami:
+
+\begin{itemize}
+    \item \textbf{usa}: F1~$=0{,}909$, Recall~$=0{,}948$. Klasyfikator wykrywa
+    praktycznie wszystkie dokumenty tej klasy i jednocześnie utrzymuje wysoką
+    Precision ($0{,}873$). Bezpośrednio wynika to z dominacji \textit{usa}
+    w zbiorze -- klasa ta ma najwięcej sąsiadów w przestrzeni cech, więc nawet
+    niewielkie podobieństwo wystarcza, by głosowanie wśród $k=4$ sąsiadów
+    wskazało \textit{usa}.
+
+    \item \textbf{uk}: F1~$=0{,}556$, Precision~$=0{,}615$, Recall~$=0{,}508$.
+    Nieco ponad połowa dokumentów z tej klasy jest poprawnie wykrywana,
+    a około 62\% przypisań do \textit{uk} okazuje się trafnych. Pozostała część
+    prawdziwych dokumentów UK trafia do innych klas, najczęściej \textit{usa}.
+
+    \item \textbf{japan}: F1~$=0{,}374$, Precision i Recall na zbliżonym
+    poziomie ($\approx 0{,}37$). Klasyfikator nie jest tu ani nadmiernie
+    ostrożny, ani nadmiernie agresywny -- po prostu w połowie przypadków nie
+    znajduje wystarczającej liczby ,,japońskich'' sąsiadów w sąsiedztwie
+    testowanego dokumentu.
+
+    \item \textbf{west-germany}, \textbf{france}, \textbf{canada}: F1 poniżej
+    $0{,}34$, Recall poniżej $0{,}27$. Większość dokumentów z tych klas trafia
+    do innej klasy, najczęściej \textit{usa}. Przyczyną jest mała reprezentacja
+    tych klas w zbiorze uczącym -- przy $k=4$ wystarczy, że wśród sąsiadów
+    znajdą się dwa dokumenty \textit{usa}, by głosowanie zignorowało prawdziwą
+    etykietę.
+\end{itemize}
+
+Ogólna Accuracy~$=0{,}823$ na pierwszy rzut oka sugeruje dobry wynik, ale jest
+myląca: klasyfikator zawsze odpowiadający \textit{usa} osiągnąłby tu podobnie
+wysoką wartość, a byłby praktycznie bezużyteczny. Właściwą miarą dla
+niezbalansowanych zbiorów jest F1~makro ($=0{,}449$), liczona osobno dla każdej
+klasy i uśredniona.
+
+\subsection{Wnioski końcowe}
+
+\begin{enumerate}
+    \item Najlepsze wyniki uzyskała metryka Manhattan -- konsekwentnie dla
+    wszystkich wartości $k$, zarówno pod względem Accuracy, jak i F1~makro.
+    Metryka Czebyszewa, wykorzystująca jedynie jeden wymiar wektora, wypadła
+    najsłabiej.
+    \item Małe wartości $k$ (rzędu kilku) zapewniają lepszy balans między
+    Precision a Recall. Przy dużych $k$ klasyfikator degeneruje się do
+    klasyfikatora większościowego i pomija klasy mniejszościowe.
+    \item Powiększanie zbioru uczącego poprawia wyniki głównie dla klas
+    mniejszościowych (Recall makro rośnie z $0{,}307$ przy 10/90 do $0{,}406$
+    przy 60/40). Powyżej podziału 60/40 dalszy wzrost zbioru uczącego nie
+    przynosi już poprawy.
+    \item Optymalny zestaw 9 cech daje minimalnie lepszy wynik niż pełne 10
+    cech; jedyną wykluczoną cechą jest \textit{sumOfAllNumericValues}. Cechy
+    tekstowe (\textit{longestWord}, \textit{mostFrequentWord}) okazały się
+    najbardziej dyskryminacyjne -- ich usunięcie pogarsza wyniki najmocniej.
+    \item Niezbalansowanie klas w zbiorze Reuters-21578 silnie ogranicza jakość
+    klasyfikacji klas mniejszościowych: \textit{france} i \textit{canada} mają
+    F1 poniżej $0{,}30$, mimo że globalna Accuracy przekracza 80\%.
+\end{enumerate}
 
 \begin{thebibliography}{9}
 

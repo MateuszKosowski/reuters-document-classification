@@ -7,6 +7,7 @@ import org.kosowskiinowak.classifier.metric.Metric;
 import org.kosowskiinowak.model.FeatureVector;
 import org.kosowskiinowak.model.SingleArticle;
 import org.kosowskiinowak.service.ArticleLoader;
+import org.kosowskiinowak.service.FeatureSubsetService;
 import org.kosowskiinowak.service.FeatureVectorExtractor;
 import org.kosowskiinowak.service.KnnClassifier;
 import org.kosowskiinowak.service.NormalizationService;
@@ -16,7 +17,6 @@ import org.kosowskiinowak.service.TextSimilarityService;
 import org.kosowskiinowak.model.ClassMetrics;
 import org.kosowskiinowak.model.CompletedExperiment;
 import org.kosowskiinowak.model.DatasetSplit;
-import org.kosowskiinowak.model.DetailedMetrics;
 import org.kosowskiinowak.model.ExperimentOutcome;
 import org.kosowskiinowak.model.ExperimentTask;
 import org.kosowskiinowak.model.FeatureName;
@@ -27,14 +27,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
-import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutionException;
@@ -76,7 +74,8 @@ public class Main {
             List<MetricDefinition> metricDefinitions = createMetricDefinitions();
             EnumSet<FeatureName> fullFeatureSet = EnumSet.allOf(FeatureName.class);
 
-            ResultsExportService exportService = new ResultsExportService();
+            FeatureSubsetService featureSubsetService = new FeatureSubsetService();
+            ResultsExportService exportService = new ResultsExportService(featureSubsetService);
             NormalizationService normalizationService = new NormalizationService();
             KnnClassifier classifier = new KnnClassifier();
             QualityMeasureService qualityService = new QualityMeasureService();
@@ -89,7 +88,7 @@ public class Main {
             Map<Double, DatasetSplit> preparedSplits = precomputeNormalizedSplits(dataset, normalizationService);
 
             List<String> stageOneRows = new ArrayList<>();
-            stageOneRows.add(csvHeader());
+            stageOneRows.add(exportService.csvHeader());
 
             LOGGER.info(String.format(
                     Locale.US,
@@ -112,8 +111,10 @@ public class Main {
                     metricDefinitions,
                     classifier,
                     qualityService,
+                    featureSubsetService,
                     executor,
-                    stageOneRows
+                    stageOneRows,
+                    exportService
             );
 
             if (stageOneResult.bestOutcome() == null) {
@@ -126,7 +127,7 @@ public class Main {
             LOGGER.info(stageOneResult.stageNote());
 
             List<String> stageTwoRows = new ArrayList<>();
-            stageTwoRows.add(csvHeader());
+            stageTwoRows.add(exportService.csvHeader());
 
             LOGGER.info("Stage 2: fixed best k and metric from stage 1, scanning train/test splits.");
             LOGGER.info(String.format(
@@ -144,8 +145,10 @@ public class Main {
                     fullFeatureSet,
                     classifier,
                     qualityService,
+                    featureSubsetService,
                     executor,
-                    stageTwoRows
+                    stageTwoRows,
+                    exportService
             );
 
             if (stageTwoResult.bestOutcome() == null) {
@@ -158,7 +161,7 @@ public class Main {
                     (1.0 - stageTwoResult.bestOutcome().trainRatio()) * 100));
 
             List<String> stageThreeRows = new ArrayList<>();
-            stageThreeRows.add(csvHeader());
+            stageThreeRows.add(exportService.csvHeader());
 
             LOGGER.info("Stage 3: fixed best k, metric and split, scanning feature subsets from 9 features down to 1.");
             LOGGER.info(String.format(
@@ -177,8 +180,10 @@ public class Main {
                     stageTwoResult.bestOutcome().metricDefinition(),
                     classifier,
                     qualityService,
+                    featureSubsetService,
                     executor,
-                    stageThreeRows
+                    stageThreeRows,
+                    exportService
             );
 
             ExperimentOutcome bestFinalOutcome = stageTwoResult.bestOutcome();
@@ -187,8 +192,8 @@ public class Main {
             }
 
             List<String> bestFinalRows = new ArrayList<>();
-            bestFinalRows.add(csvHeader());
-            appendCsvRows(bestFinalRows, "BEST_FINAL", bestFinalOutcome);
+            bestFinalRows.add(exportService.csvHeader());
+            exportService.appendCsvRows(bestFinalRows, "BEST_FINAL", bestFinalOutcome);
 
             exportService.exportToCsv(stageOneRows, outputDirectory.resolve(STAGE_ONE_FILE).toString());
             exportService.exportToCsv(stageTwoRows, outputDirectory.resolve(STAGE_TWO_FILE).toString());
@@ -205,7 +210,7 @@ public class Main {
                     bestFinalOutcome.metrics().selectionScore()
             ));
             LOGGER.info(String.format(Locale.US, "Best configuration details: %s", bestFinalOutcome));
-            printDetailedSummary(bestFinalOutcome);
+            printDetailedSummary(bestFinalOutcome, featureSubsetService);
             LOGGER.info("CSV files saved to: " + outputDirectory.toAbsolutePath());
         } finally {
             if (executor != null) {
@@ -260,8 +265,10 @@ public class Main {
                                                       List<MetricDefinition> metricDefinitions,
                                                       KnnClassifier classifier,
                                                       QualityMeasureService qualityService,
+                                                      FeatureSubsetService featureSubsetService,
                                                       ExecutorService executor,
-                                                      List<String> csvRows) {
+                                                      List<String> csvRows,
+                                                      ResultsExportService exportService) {
         List<ExperimentTask> tasks = new ArrayList<>();
         for (int k = 1; k <= MAX_K_TO_TEST; k++) {
             for (MetricDefinition metricDefinition : metricDefinitions) {
@@ -275,7 +282,8 @@ public class Main {
                                 currentK,
                                 activeFeatures,
                                 classifier,
-                                qualityService
+                                qualityService,
+                                featureSubsetService
                         )
                 ));
             }
@@ -298,7 +306,7 @@ public class Main {
                 30,
                 completedTask -> {
                     ExperimentOutcome outcome = completedTask.outcome();
-                    appendCsvRows(csvRows, "STAGE_1_K_METRIC", outcome);
+                    exportService.appendCsvRows(csvRows, "STAGE_1_K_METRIC", outcome);
                     LOGGER.info(String.format(Locale.US,
                             "Stage 1 task finished [%s] -> score=%.4f, accuracy=%.4f, macroF1=%.4f",
                             completedTask.label(), outcome.metrics().selectionScore(), outcome.metrics().accuracy(), outcome.metrics().macroF1()
@@ -332,8 +340,10 @@ public class Main {
                                                   EnumSet<FeatureName> activeFeatures,
                                                   KnnClassifier classifier,
                                                   QualityMeasureService qualityService,
+                                                  FeatureSubsetService featureSubsetService,
                                                   ExecutorService executor,
-                                                  List<String> csvRows) {
+                                                  List<String> csvRows,
+                                                  ResultsExportService exportService) {
         List<ExperimentTask> tasks = new ArrayList<>();
         for (double trainRatio : SPLIT_RATIOS) {
             DatasetSplit split = preparedSplits.get(trainRatio);
@@ -355,7 +365,8 @@ public class Main {
                             k,
                             activeFeatures,
                             classifier,
-                            qualityService
+                            qualityService,
+                            featureSubsetService
                     )
             ));
         }
@@ -374,7 +385,7 @@ public class Main {
                 1,
                 completedTask -> {
                     ExperimentOutcome outcome = completedTask.outcome();
-                    appendCsvRows(csvRows, "STAGE_2_SPLIT", outcome);
+                    exportService.appendCsvRows(csvRows, "STAGE_2_SPLIT", outcome);
                     LOGGER.info(String.format(Locale.US,
                             "Stage 2 split finished [%s] -> score=%.4f, accuracy=%.4f, macroF1=%.4f",
                             completedTask.label(), outcome.metrics().selectionScore(), outcome.metrics().accuracy(), outcome.metrics().macroF1()
@@ -399,9 +410,11 @@ public class Main {
                                                           MetricDefinition metricDefinition,
                                                           KnnClassifier classifier,
                                                           QualityMeasureService qualityService,
+                                                          FeatureSubsetService featureSubsetService,
                                                           ExecutorService executor,
-                                                          List<String> csvRows) {
-        List<EnumSet<FeatureName>> featureSubsets = generateFeatureSubsets();
+                                                          List<String> csvRows,
+                                                          ResultsExportService exportService) {
+        List<EnumSet<FeatureName>> featureSubsets = featureSubsetService.generateFeatureSubsets();
         LOGGER.info(String.format(
                 Locale.US,
                 "Stage 3 progress: prepared %d feature subsets to evaluate.",
@@ -414,7 +427,7 @@ public class Main {
                                 Locale.US,
                                 "featureCount=%d features=%s",
                                 activeFeatures.size(),
-                                formatFeatureSet(activeFeatures)
+                                featureSubsetService.formatFeatureSet(activeFeatures)
                         ),
                         () -> runSingleExperiment(
                                 split,
@@ -423,7 +436,8 @@ public class Main {
                                 k,
                                 activeFeatures,
                                 classifier,
-                                qualityService
+                                qualityService,
+                                featureSubsetService
                         )
                 ))
                 .toList();
@@ -437,13 +451,13 @@ public class Main {
                 25,
                 completedTask -> {
                     ExperimentOutcome outcome = completedTask.outcome();
-                    appendCsvRows(csvRows, "STAGE_3_FEATURES", outcome);
+                    exportService.appendCsvRows(csvRows, "STAGE_3_FEATURES", outcome);
 
                     if (isBetter(outcome, bestOutcomeHolder[0])) {
                         bestOutcomeHolder[0] = outcome;
                         LOGGER.info(String.format(Locale.US,
                                 "Stage 3 NEW BEST: featuresCount=%d, features=[%s] -> score=%.4f",
-                                outcome.activeFeatures().size(), formatFeatureSet(outcome.activeFeatures()), outcome.metrics().selectionScore()
+                                outcome.activeFeatures().size(), featureSubsetService.formatFeatureSet(outcome.activeFeatures()), outcome.metrics().selectionScore()
                         ));
                     }
                 }
@@ -505,13 +519,14 @@ public class Main {
                                                          int k,
                                                          EnumSet<FeatureName> activeFeatures,
                                                          KnnClassifier classifier,
-                                                         QualityMeasureService qualityService) {
-        List<FeatureVector> trainingSet = isFullFeatureSet(activeFeatures)
+                                                         QualityMeasureService qualityService,
+                                                         FeatureSubsetService featureSubsetService) {
+        List<FeatureVector> trainingSet = featureSubsetService.isFullFeatureSet(activeFeatures)
                 ? split.trainingSet()
-                : maskDataset(split.trainingSet(), activeFeatures);
-        List<FeatureVector> testSet = isFullFeatureSet(activeFeatures)
+                : featureSubsetService.maskDataset(split.trainingSet(), activeFeatures);
+        List<FeatureVector> testSet = featureSubsetService.isFullFeatureSet(activeFeatures)
                 ? split.testSet()
-                : maskDataset(split.testSet(), activeFeatures);
+                : featureSubsetService.maskDataset(split.testSet(), activeFeatures);
 
         long startTime = System.currentTimeMillis();
         List<QualityMeasureService.ClassificationResult> results =
@@ -523,51 +538,9 @@ public class Main {
                 metricDefinition,
                 k,
                 EnumSet.copyOf(activeFeatures),
-                calculateMetrics(results, qualityService),
+                qualityService.calculateDetailedMetrics(results),
                 durationMs
         );
-    }
-
-    private static DetailedMetrics calculateMetrics(List<QualityMeasureService.ClassificationResult> results,
-                                                    QualityMeasureService qualityService) {
-        Map<String, Double> accuracyMap = qualityService.calculateAccuracy(results);
-        Map<String, Double> precisionMap = qualityService.calculatePrecision(results);
-        Map<String, Double> recallMap = qualityService.calculateRecall(results);
-        Map<String, Double> f1Map = qualityService.calculateF1(precisionMap, recallMap);
-
-        Set<String> classNames = new TreeSet<>();
-        classNames.addAll(filterClassNames(precisionMap.keySet()));
-        classNames.addAll(filterClassNames(recallMap.keySet()));
-        classNames.addAll(filterClassNames(f1Map.keySet()));
-
-        List<ClassMetrics> perClassMetrics = classNames.stream()
-                .map(className -> new ClassMetrics(
-                        className,
-                        precisionMap.getOrDefault(className, 0.0),
-                        recallMap.getOrDefault(className, 0.0),
-                        f1Map.getOrDefault(className, 0.0)
-                ))
-                .toList();
-
-        return new DetailedMetrics(
-                extractAccuracyValue(accuracyMap),
-                extractMacroValue(precisionMap),
-                extractMacroValue(recallMap),
-                extractMacroValue(f1Map),
-                harmonicMean(extractAccuracyValue(accuracyMap), extractMacroValue(f1Map)),
-                perClassMetrics
-        );
-    }
-
-    private static double harmonicMean(double first, double second) {
-        if (first <= 0.0 || second <= 0.0) {
-            return 0.0;
-        }
-        return 2.0 * first * second / (first + second);
-    }
-
-    private static boolean isFullFeatureSet(Set<FeatureName> activeFeatures) {
-        return activeFeatures.size() == FeatureName.values().length;
     }
 
     private static List<QualityMeasureService.ClassificationResult> classifyTestSetSequentially(
@@ -630,93 +603,6 @@ public class Main {
         }
     }
 
-    private static Set<String> filterClassNames(Set<String> rawKeys) {
-        return rawKeys.stream()
-                .filter(Main::isClassName)
-                .collect(Collectors.toCollection(TreeSet::new));
-    }
-
-    private static boolean isClassName(String key) {
-        String normalized = key.toLowerCase(Locale.ROOT);
-        return !normalized.contains("macro")
-                && !normalized.contains("makro")
-                && !normalized.contains("accuracy");
-    }
-
-    private static double extractAccuracyValue(Map<String, Double> accuracyMap) {
-        return accuracyMap.entrySet().stream()
-                .filter(entry -> entry.getKey().toLowerCase(Locale.ROOT).contains("accuracy"))
-                .map(Map.Entry::getValue)
-                .findFirst()
-                .orElse(0.0);
-    }
-
-    private static double extractMacroValue(Map<String, Double> metricMap) {
-        return metricMap.entrySet().stream()
-                .filter(entry -> {
-                    String key = entry.getKey().toLowerCase(Locale.ROOT);
-                    return key.contains("macro") || key.contains("makro");
-                })
-                .map(Map.Entry::getValue)
-                .findFirst()
-                .orElse(0.0);
-    }
-
-    private static List<FeatureVector> maskDataset(List<FeatureVector> dataset, Set<FeatureName> activeFeatures) {
-        return dataset.stream()
-                .map(vector -> maskVector(vector, activeFeatures))
-                .toList();
-    }
-
-    private static FeatureVector maskVector(FeatureVector vector, Set<FeatureName> activeFeatures) {
-        return new FeatureVector(
-                vector.label(),
-                activeFeatures.contains(FeatureName.LONGEST_WORD) ? safeText(vector.longestWord()) : "",
-                activeFeatures.contains(FeatureName.MOST_FREQUENT_WORD) ? safeText(vector.mostFrequentWord()) : "",
-                activeFeatures.contains(FeatureName.AVERAGE_WORD_LENGTH) ? vector.averageWordLength() : 0.0,
-                activeFeatures.contains(FeatureName.VOCABULARY_RICHNESS) ? vector.vocabularyRichness() : 0.0,
-                activeFeatures.contains(FeatureName.AVERAGE_SENTENCE_LENGTH) ? vector.averageSentenceLength() : 0.0,
-                activeFeatures.contains(FeatureName.UPPERCASE_LETTER_RATIO) ? vector.uppercaseLetterRatio() : 0.0,
-                activeFeatures.contains(FeatureName.FINANCIAL_SIGN_DENSITY) ? vector.financialSignDensity() : 0.0,
-                activeFeatures.contains(FeatureName.FLESCH_READING_EASE_INDEX) ? vector.fleschReadingEaseIndex() : 0.0,
-                activeFeatures.contains(FeatureName.VOWEL_TO_CONSONANT_RATIO) ? vector.vowelToConsonantRatio() : 0.0,
-                activeFeatures.contains(FeatureName.SUM_OF_ALL_NUMERIC_VALUES) ? vector.sumOfAllNumericValues() : 0.0
-        );
-    }
-
-    private static String safeText(String value) {
-        return value == null ? "" : value;
-    }
-
-    private static List<EnumSet<FeatureName>> generateFeatureSubsets() {
-        FeatureName[] features = FeatureName.values();
-        List<EnumSet<FeatureName>> subsets = new ArrayList<>();
-
-        int maxMask = (1 << features.length) - 1;
-        for (int mask = 1; mask <= maxMask; mask++) {
-            int featureCount = Integer.bitCount(mask);
-            if (featureCount == features.length) {
-                continue;
-            }
-
-            EnumSet<FeatureName> subset = EnumSet.noneOf(FeatureName.class);
-            for (int bitIndex = 0; bitIndex < features.length; bitIndex++) {
-                if ((mask & (1 << bitIndex)) != 0) {
-                    subset.add(features[bitIndex]);
-                }
-            }
-
-            subsets.add(subset);
-        }
-
-        subsets.sort(Comparator
-                .<EnumSet<FeatureName>>comparingInt(Set::size)
-                .reversed()
-                .thenComparing(Main::formatFeatureSet));
-
-        return subsets;
-    }
-
     private static boolean isBetter(ExperimentOutcome candidate, ExperimentOutcome currentBest) {
         if (currentBest == null) return true;
 
@@ -727,60 +613,7 @@ public class Main {
         return candidate.activeFeatures().size() < currentBest.activeFeatures().size();
     }
 
-    private static void appendCsvRows(List<String> csvRows, String stageName, ExperimentOutcome outcome) {
-        csvRows.add(formatCsvRow(stageName, outcome, "MACRO", "MACRO",
-                outcome.metrics().macroPrecision(),
-                outcome.metrics().macroRecall(),
-                outcome.metrics().macroF1()));
-
-        for (ClassMetrics classMetrics : outcome.metrics().perClassMetrics()) {
-            csvRows.add(formatCsvRow(stageName, outcome, "CLASS", classMetrics.className(),
-                    classMetrics.precision(),
-                    classMetrics.recall(),
-                    classMetrics.f1()));
-        }
-    }
-
-    private static String formatCsvRow(String stageName,
-                                       ExperimentOutcome outcome,
-                                       String rowType,
-                                       String className,
-                                       double precision,
-                                       double recall,
-                                       double f1) {
-        return String.format(
-                Locale.US,
-                "%s;%.2f;%.2f;%s;%03d;%02d;%s;%s;%s;%.6f;%.6f;%.6f;%.6f;%.6f;%d",
-                stageName,
-                outcome.trainRatio(),
-                1.0 - outcome.trainRatio(),
-                outcome.metricDefinition().name(),
-                outcome.k(),
-                outcome.activeFeatures().size(),
-                formatFeatureSet(outcome.activeFeatures()),
-                rowType,
-                className,
-                outcome.metrics().selectionScore(),
-                outcome.metrics().accuracy(),
-                precision,
-                recall,
-                f1,
-                outcome.durationMs()
-        );
-    }
-
-    private static String csvHeader() {
-        return "Stage;TrainRatio;TestRatio;Metric;K;FeatureCount;Features;RowType;Class;SelectionScore;Accuracy;Precision;Recall;F1;DurationMs";
-    }
-
-    private static String formatFeatureSet(Set<FeatureName> activeFeatures) {
-        return activeFeatures.stream()
-                .sorted(Comparator.comparingInt(Enum::ordinal))
-                .map(FeatureName::csvLabel)
-                .collect(Collectors.joining(","));
-    }
-
-    private static void printDetailedSummary(ExperimentOutcome outcome) {
+    private static void printDetailedSummary(ExperimentOutcome outcome, FeatureSubsetService featureSubsetService) {
         LOGGER.info("=== FINAL BEST CONFIGURATION ===");
         LOGGER.info(String.format(Locale.US, "k = %d", outcome.k()));
         LOGGER.info("metric = " + outcome.metricDefinition().name());
@@ -790,7 +623,7 @@ public class Main {
                 outcome.trainRatio() * 100,
                 (1.0 - outcome.trainRatio()) * 100
         ));
-        LOGGER.info("features = " + formatFeatureSet(outcome.activeFeatures()));
+        LOGGER.info("features = " + featureSubsetService.formatFeatureSet(outcome.activeFeatures()));
         LOGGER.info(String.format(
                 Locale.US,
                 "selectionScore = %.6f (harmonic mean of accuracy and macro F1)",
@@ -813,7 +646,7 @@ public class Main {
                     classMetrics.className(),
                     classMetrics.precision(),
                     classMetrics.recall(),
-                classMetrics.f1()
+                    classMetrics.f1()
             ));
         }
     }
