@@ -209,7 +209,7 @@ def plot_stage3_feature_count():
     ax2.tick_params(axis='y', colors='#DC2626')
     ax.set_xlabel('Liczba cech')
     ax.set_ylabel('F1 makro')
-    ax.set_title('Wpływ liczby cech na F1 makro i Accuracy\n(Manhattan, k=4, podział 90/10)')
+    ax.set_title('Wpływ liczby cech na F1 makro i Accuracy\n(Manhattan, k=4, podział 60/40)')
     ax.set_xticks(counts)
     ax.legend(loc='lower right')
     ax2.legend(loc='center right')
@@ -226,7 +226,7 @@ def plot_stage3_feature_count():
                     flierprops=dict(marker='o', color='#2563EB', alpha=0.3, markersize=3))
     ax.set_xlabel('Liczba cech')
     ax.set_ylabel('F1 makro')
-    ax.set_title('Rozkład F1 makro dla podzbiorów cech\n(Manhattan, k=4, podział 90/10)')
+    ax.set_title('Rozkład F1 makro dla podzbiorów cech\n(Manhattan, k=4, podział 60/40)')
     ax.set_xticks(counts)
     ax.grid(True, axis='y', linestyle='--', alpha=0.4)
 
@@ -276,7 +276,7 @@ def plot_stage3_feature_frequency():
             ax.text(v + 0.3, i, str(v), va='center', fontsize=8)
 
     axes[0].set_ylabel('Cecha')
-    fig.suptitle('Częstość występowania cech w najlepszych konfiguracjach\n(Stage 3, Manhattan, k=4, podział 90/10)', y=1.02)
+    fig.suptitle('Częstość występowania cech w najlepszych konfiguracjach\n(Stage 3, Manhattan, k=4, podział 60/40)', y=1.02)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, 'stage3_feature_frequency.pdf'), bbox_inches='tight')
     fig.savefig(os.path.join(OUT, 'stage3_feature_frequency.png'), bbox_inches='tight')
@@ -321,8 +321,8 @@ def plot_best_per_class():
     ax.set_ylabel('Wartość miary')
     ax.set_ylim(0, 1.05)
     ax.set_title('Precision, Recall i F1 dla każdej klasy – najlepsza konfiguracja\n'
-                 '(Manhattan, k=4, podział 90/10, cechy: longestWord, mostFrequentWord,\n'
-                 'vocabularyRichness, fleschReadingEaseIndex, sumOfAllNumericValues)')
+                 '(Manhattan, k=4, podział 60/40, 9 cech:\n'
+                 'wszystkie oprócz uppercaseLetterRatio)')
     ax.legend(loc='upper left', fontsize=8.5)
     ax.grid(True, axis='y', linestyle='--', alpha=0.4)
 
@@ -406,8 +406,8 @@ def plot_stage3_ablation():
     rows = [r for r in load_csv('03-feature-search.csv') if r['RowType'] == 'MACRO']
     s2   = [r for r in load_csv('02-split-search.csv')   if r['RowType'] == 'MACRO']
 
-    # baseline: 10 cech, podział 90/10
-    base = next(r for r in s2 if r['TrainRatio'] == '0.90')
+    # baseline: 10 cech, podział 60/40 (optimum ze Stage 2)
+    base = next(r for r in s2 if r['TrainRatio'] == '0.60')
     base_acc = float(base['Accuracy'])
     base_f1  = float(base['F1'])
 
@@ -495,7 +495,7 @@ def plot_stage3_ablation():
     ax.grid(True, axis='x', linestyle='--', alpha=0.4)
 
     fig.suptitle('Analiza wpływu poszczególnych cech na Accuracy i F1 makro\n'
-                 '(Manhattan, k=4, podział 90/10)', y=1.02)
+                 '(Manhattan, k=4, podział 60/40)', y=1.02)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, 'stage3_ablation.pdf'), bbox_inches='tight')
     fig.savefig(os.path.join(OUT, 'stage3_ablation.png'), bbox_inches='tight')
