@@ -556,8 +556,11 @@ klasyfikacji, przeprowadzono dwa uzupełniające eksperymenty
 \begin{enumerate}
     \item \textbf{Analiza jednej cechy:} klasyfikację uruchomiono osobno dla
     każdej z 10 cech (podzbiory 1-elementowe). Accuracy waha się od
-    $0{,}760$ (najczęstsze słowo) do $0{,}815$ (najdłuższe słowo).
-    Punkt odniesienia to Accuracy$=0{,}823$ dla pełnego zestawu 10 cech.
+    $0{,}758$ (\textit{fleschReadingEaseIndex}) do $0{,}815$
+    (\textit{longestWord}); obie cechy tekstowe plasują się odpowiednio
+    w dolnej (\textit{mostFrequentWord}, $0{,}760$) i górnej
+    (\textit{longestWord}, $0{,}815$) części zakresu.
+    Punkt odniesienia to Accuracy$=0{,}822$ dla pełnego zestawu 10 cech.
 
     \item \textbf{Ablacja (leave-one-out):} z pełnego zestawu 10 cech
     usuwano po jednej cesze i mierzono zmianę Accuracy względem baseline.
@@ -698,7 +701,7 @@ dziewięć cech jest w niej całkowicie pomijanych przy każdej parze wektorów.
 Na rysunkach~\ref{fig:stage1_k_metric} i~\ref{fig:stage1_prec_rec} widać
 charakterystyczny ,,nożycowy'' efekt: wraz ze wzrostem $k$ Accuracy lekko
 rośnie (dla metryki Manhattan: od $0{,}777$ przy $k=1$ do $0{,}825$ przy
-$k=30$), natomiast F1~makro systematycznie spada (od $0{,}439$ do $0{,}319$).
+$k=30$), natomiast F1~makro systematycznie spada (od $0{,}438$ do $0{,}320$).
 Jednocześnie Precision rośnie, a Recall maleje.
 
 Wynika to wprost z niezbalansowania zbioru -- klasa \textit{usa} ma znacznie
@@ -779,7 +782,10 @@ silną asymetrię wyników między klasami:
     typów, a poprawnie rozpoznaje tylko nieco ponad jedną trzecią dokumentów
     tej klasy.
 
-    $0{,}36$, Recall poniżej $0{,}29$. Klasyfikator ogólnie słabo radzi sobie
+    \item \textbf{west-germany, france, canada}: F1 w przedziale
+    $0{,}221$--$0{,}354$, Precision w przedziale $0{,}395$--$0{,}463$,
+    a Recall poniżej $0{,}29$ (canada~$=0{,}154$, france~$=0{,}215$,
+    west-germany~$=0{,}287$). Klasyfikator ogólnie słabo radzi sobie
     z ich detekcją. Przyczyną jest ich mała reprezentacja
     w zbiorze uczącym -- przy $k=4$ wystarczy, że wśród sąsiadów znajdą się
     dwa dokumenty z klasy większościowej, by głosowanie zignorowało prawdziwą
